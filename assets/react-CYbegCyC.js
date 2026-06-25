@@ -1,4 +1,4 @@
-import{r as yc}from"./r3f-Dc1ibbov.js";var hi={exports:{}},ve={},yi={exports:{}},gi={};/**
+import{r as yc}from"./r3f-BRmxGc62.js";var hi={exports:{}},ve={},yi={exports:{}},gi={};/**
  * @license React
  * scheduler.production.min.js
  *
