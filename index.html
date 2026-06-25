@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NOWHERE TOWN</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React + ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Fonts: brutalist serif + monospace -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Special+Elite&display=swap"
+    rel="stylesheet"
+  />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            mono: ['"IBM Plex Mono"', 'monospace'],
+            type: ['"Special Elite"', 'serif'],
+          },
+          colors: {
+            amber: { rust: '#b06a2c' },
+            blood: '#7e1414',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    html, body, #root {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: '"IBM Plex Mono"', monospace;
+      color: #c9c4bb;
+      cursor: default;
+    }
+
+    /* ---------- CRT / VHS scanlines ---------- */
+    .crt-scanlines::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 0px,
+        rgba(0, 0, 0, 0) 2px,
+        rgba(0, 0, 0, 0.35) 3px,
+        rgba(0, 0, 0, 0.35) 4px
+      );
+      mix-blend-mode: multiply;
+      opacity: 0.55;
+    }
+
+    /* Moving VHS scan line band */
+    .crt-scanlines::after {
+      content: "";
+      position: fixed;
+      left: 0;
+      right: 0;
+      height: 140px;
+      pointer-events: none;
+      z-index: 9998;
+      background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.03) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+      animation: vhsBand 7s linear infinite;
+    }
+
+    @keyframes vhsBand {
+      0% { top: -140px; }
+      100% { top: 100%; }
+    }
+
+    /* ---------- Vignette / claustrophobia ---------- */
+    .vignette::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9997;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(0, 0, 0, 0) 35%,
+        rgba(0, 0, 0, 0.55) 80%,
+        rgba(0, 0, 0, 0.92) 100%
+      );
+      animation: breathe 9s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.85; }
+      50% { opacity: 1; }
+    }
+
+    /* ---------- Faint flicker ---------- */
+    .flicker {
+      animation: flicker 6s infinite steps(60);
+    }
+    @keyframes flicker {
+      0%, 97%, 100% { opacity: 1; }
+      97.5% { opacity: 0.82; }
+      98% { opacity: 0.96; }
+      98.5% { opacity: 0.78; }
+    }
+
+    /* ---------- Glitch text effect for menu hover ---------- */
+    .glitch-target { position: relative; transition: color 0.08s linear; }
+    .glitch-target:hover {
+      color: #7e1414 !important;
+      text-shadow: 1px 0 #b06a2c, -1px 0 #7e1414;
+      animation: glitchShake 0.18s steps(2) infinite;
+    }
+    @keyframes glitchShake {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-1px, 1px); }
+      50% { transform: translate(1px, -1px); }
+      75% { transform: translate(-1px, 0); }
+      100% { transform: translate(1px, 0); }
+    }
+
+    /* ---------- Sunset pulse ---------- */
+    .sunset-pulse {
+      animation: sunsetPulse 1.1s ease-in-out infinite;
+    }
+    @keyframes sunsetPulse {
+      0%, 100% { opacity: 1; text-shadow: 0 0 8px rgba(126, 20, 20, 0.9); }
+      50% { opacity: 0.55; text-shadow: 0 0 22px rgba(126, 20, 20, 1); }
+    }
+
+    /* ---------- Title breathing ---------- */
+    .title-drift {
+      animation: titleDrift 8s ease-in-out infinite;
+    }
+    @keyframes titleDrift {
+      0%, 100% { letter-spacing: 0.35em; opacity: 0.92; }
+      50% { letter-spacing: 0.42em; opacity: 1; }
+    }
+
+    /* Talisman sway */
+    .sway { animation: sway 4s ease-in-out infinite; transform-origin: top center; }
+    @keyframes sway {
+      0%, 100% { transform: rotate(-3deg); }
+      50% { transform: rotate(3deg); }
+    }
+
+    .prompt-active { animation: promptPulse 1.6s ease-in-out infinite; }
+    @keyframes promptPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+  </style>
+</head>
+<body class="crt-scanlines vignette">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // Helper to render a Lucide icon as inline SVG
+    function Icon({ name, className = "", size = 20, strokeWidth = 1.5 }) {
+      const ref = useRef(null);
+      useEffect(() => {
+        if (ref.current && window.lucide && lucide.icons) {
+          const key = name
+            .split('-')
+            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+            .join('');
+          const iconNode = lucide.icons[key];
+          if (iconNode) {
+            ref.current.innerHTML = '';
+            const svg = lucide.createElement(iconNode);
+            svg.setAttribute('width', size);
+            svg.setAttribute('height', size);
+            svg.setAttribute('stroke-width', strokeWidth);
+            svg.setAttribute('class', className);
+            ref.current.appendChild(svg);
+          }
+        }
+      }, [name, className, size, strokeWidth]);
+      return <span ref={ref} className="inline-flex items-center justify-center" />;
+    }
+
+    // ----------------- MAIN MENU -----------------
+    function MainMenu({ onEnter }) {
+      const [showSettings, setShowSettings] = useState(false);
+
+      const items = [
+        { label: 'ENTER TOWN', action: onEnter, hint: 'There is no leaving.' },
+        { label: 'SETTINGS', action: () => setShowSettings((s) => !s), hint: 'Adjust what little you control.' },
+        { label: 'ABANDON HOPE', action: () => window.close?.(), hint: 'Quit. As if that helps.' },
+      ];
+
+      return (
+        <div className="relative h-full w-full flex flex-col items-center justify-center bg-black flicker select-none">
+          {/* faint static grain backdrop */}
+          <div
+            className="absolute inset-0 opacity-[0.04]"
+            style={{
+              backgroundImage:
+                'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27120%27 height=%27120%27%3E%3Cfilter id=%27n%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.9%27 numOctaves=%274%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23n)%27/%3E%3C/svg%3E")',
+            }}
+          />
+
+          <div className="relative z-10 flex flex-col items-center">
+            <p className="font-mono text-[10px] tracking-[0.5em] text-amber-rust/70 mb-6 uppercase">
+              A place you cannot leave
+            </p>
+
+            <h1 className="font-type text-6xl md:text-8xl text-stone-200 title-drift mb-2">
+              NOWHERE
+            </h1>
+            <h2 className="font-type text-3xl md:text-4xl text-stone-500 tracking-[0.4em] mb-16">
+              TOWN
+            </h2>
+
+            <nav className="flex flex-col items-center gap-6">
+              {items.map((item) => (
+                <button
+                  key={item.label}
+                  onClick={item.action}
+                  className="group flex flex-col items-center"
+                >
+                  <span className="glitch-target font-mono text-xl md:text-2xl tracking-[0.3em] text-stone-300">
+                    {item.label}
+                  </span>
+                  <span className="font-mono text-[10px] tracking-widest text-stone-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 mt-1">
+                    {item.hint}
+                  </span>
+                </button>
+              ))}
+            </nav>
+
+            {showSettings && (
+              <div className="mt-10 w-72 border border-stone-800 bg-black/80 p-4 font-mono text-xs text-stone-400">
+                <div className="flex items-center justify-between mb-3 text-amber-rust">
+                  <span className="tracking-widest">SETTINGS</span>
+                  <Icon name="settings" size={14} className="text-amber-rust" />
+                </div>
+                <Slider label="MASTER VOLUME" />
+                <Slider label="BRIGHTNESS" def={30} />
+                <Slider label="WHISPERS" def={88} />
+                <p className="mt-3 text-[9px] text-stone-700 tracking-wide">
+                  Turning the whispers down does not make them stop.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <p className="absolute bottom-6 font-mono text-[9px] tracking-[0.3em] text-stone-700">
+            DON'T OPEN THE DOOR AFTER DARK · v0.1
+          </p>
+        </div>
+      );
+    }
+
+    function Slider({ label, def = 60 }) {
+      const [val, setVal] = useState(def);
+      return (
+        <div className="mb-2">
+          <div className="flex justify-between text-[10px] text-stone-500 mb-1">
+            <span>{label}</span>
+            <span className="text-amber-rust">{val}</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={val}
+            onChange={(e) => setVal(+e.target.value)}
+            className="w-full h-[3px] appearance-none bg-stone-800 accent-blood cursor-pointer"
+          />
+        </div>
+      );
+    }
+
+    // ----------------- IN-GAME HUD -----------------
+    const DAY_LENGTH = 60; // seconds of daylight (mock)
+
+    function HUD({ onExit }) {
+      const [secondsLeft, setSecondsLeft] = useState(DAY_LENGTH);
+      const [stamina, setStamina] = useState(100);
+      const [holding, setHolding] = useState(false);
+      const [promptActive, setPromptActive] = useState(false);
+      const [hasTalisman, setHasTalisman] = useState(true);
+
+      const isSunset = secondsLeft <= 0;
+      const nearSunset = secondsLeft > 0 && secondsLeft <= 10;
+
+      // Day timer tick
+      useEffect(() => {
+        if (isSunset) return;
+        const t = setInterval(() => {
+          setSecondsLeft((s) => Math.max(0, s - 1));
+        }, 1000);
+        return () => clearInterval(t);
+      }, [isSunset]);
+
+      // Stamina drain / regen for "Hold Breath"
+      useEffect(() => {
+        const t = setInterval(() => {
+          setStamina((s) => {
+            if (holding) return Math.max(0, s - 3);
+            return Math.min(100, s + 1.5);
+          });
+        }, 100);
+        return () => clearInterval(t);
+      }, [holding]);
+
+      // Keyboard: Space = hold breath, E = interact
+      useEffect(() => {
+        const down = (e) => {
+          if (e.code === 'Space') { e.preventDefault(); setHolding(true); }
+          if (e.code === 'KeyE') setHasTalisman(false);
+        };
+        const up = (e) => {
+          if (e.code === 'Space') setHolding(false);
+        };
+        window.addEventListener('keydown', down);
+        window.addEventListener('keyup', up);
+        return () => {
+          window.removeEventListener('keydown', down);
+          window.removeEventListener('keyup', up);
+        };
+      }, []);
+
+      const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+      const ss = String(secondsLeft % 60).padStart(2, '0');
+
+      const clockColor = isSunset
+        ? 'text-blood sunset-pulse'
+        : nearSunset
+        ? 'text-amber-rust'
+        : 'text-stone-300';
+
+      return (
+        <div className="relative h-full w-full bg-black flicker select-none overflow-hidden">
+          {/* Ambient scene tint that darkens toward sunset */}
+          <div
+            className="absolute inset-0 transition-colors duration-1000"
+            style={{
+              background: isSunset
+                ? 'radial-gradient(ellipse at center, rgba(40,6,6,0.5), rgba(0,0,0,0.95))'
+                : nearSunset
+                ? 'radial-gradient(ellipse at center, rgba(48,28,8,0.35), rgba(0,0,0,0.9))'
+                : 'radial-gradient(ellipse at center, rgba(20,20,22,0.25), rgba(0,0,0,0.85))',
+            }}
+          />
+
+          {/* faint distant figure silhouette appears at sunset */}
+          {isSunset && (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/3 opacity-20">
+              <div className="w-12 h-40 bg-black rounded-t-full" />
+            </div>
+          )}
+
+          {/* ---------- TOP CENTER: Day/Night clock ---------- */}
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 flex flex-col items-center z-20">
+            <div className="flex items-center gap-2 mb-1">
+              <Icon
+                name={isSunset ? 'moon' : 'sun'}
+                size={14}
+                className={isSunset ? 'text-blood' : 'text-amber-rust'}
+              />
+              <span className="font-mono text-[10px] tracking-[0.4em] text-stone-500 uppercase">
+                {isSunset ? 'Sunset' : 'Time Until Dark'}
+              </span>
+            </div>
+            <div className={`font-mono text-4xl tracking-[0.25em] ${clockColor}`}>
+              {isSunset ? 'DARK' : `${mm}:${ss}`}
+            </div>
+            {isSunset && (
+              <p className="font-mono text-[10px] tracking-[0.3em] text-blood/80 mt-1 sunset-pulse">
+                THEY ARE COMING OUT
+              </p>
+            )}
+          </div>
+
+          {/* ---------- CENTER: Interaction prompt ---------- */}
+          <div className="absolute left-1/2 top-[58%] -translate-x-1/2 z-20">
+            <button
+              onMouseEnter={() => setPromptActive(true)}
+              onMouseLeave={() => setPromptActive(false)}
+              className={`font-mono text-base tracking-[0.25em] transition-all duration-300 ${
+                promptActive
+                  ? 'text-stone-100 opacity-100 prompt-active'
+                  : 'text-stone-400 opacity-40'
+              }`}
+            >
+              <span className="text-amber-rust">[ E ]</span>{' '}
+              {hasTalisman ? 'Hang Talisman' : 'Hide Under Bed [ C ]'}
+            </button>
+          </div>
+
+          {/* ---------- BOTTOM CENTER: Stamina (Hold Breath) ---------- */}
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-64 z-20">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-mono text-[9px] tracking-[0.3em] text-stone-500 uppercase">
+                {holding ? 'Holding Breath' : 'Breath'}
+              </span>
+              <Icon name="wind" size={12} className="text-stone-600" />
+            </div>
+            <div className="h-[3px] w-full bg-stone-900 overflow-hidden">
+              <div
+                className="h-full transition-[width] duration-100 ease-linear"
+                style={{
+                  width: `${stamina}%`,
+                  background:
+                    stamina < 25 ? '#7e1414' : stamina < 60 ? '#b06a2c' : '#d6d3cd',
+                }}
+              />
+            </div>
+            <p className="font-mono text-[8px] tracking-widest text-stone-700 mt-1 text-center">
+              HOLD [ SPACE ] TO STAY SILENT
+            </p>
+          </div>
+
+          {/* ---------- BOTTOM RIGHT: Inventory slot ---------- */}
+          <div className="absolute bottom-10 right-10 z-20">
+            <div className="w-16 h-16 border border-stone-700/70 flex items-center justify-center relative bg-black/40">
+              {hasTalisman ? (
+                <div className="sway flex flex-col items-center">
+                  <div className="w-[1px] h-3 bg-stone-600" />
+                  <Icon name="cross" size={22} className="text-amber-rust/70" />
+                </div>
+              ) : (
+                <span className="font-mono text-[8px] text-stone-700 tracking-widest text-center px-1">
+                  EMPTY
+                </span>
+              )}
+              <span className="absolute -top-2 -left-2 w-4 h-4 border-t border-l border-stone-600" />
+              <span className="absolute -bottom-2 -right-2 w-4 h-4 border-b border-r border-stone-600" />
+            </div>
+            <p className="font-mono text-[8px] tracking-widest text-stone-600 mt-1 text-center">
+              TALISMAN
+            </p>
+          </div>
+
+          {/* ---------- DEV / MOCK CONTROLS ---------- */}
+          <div className="absolute top-6 left-6 z-30 flex flex-col gap-2">
+            <button
+              onClick={() => setSecondsLeft((s) => Math.max(0, s - 15))}
+              className="glitch-target font-mono text-[10px] tracking-widest text-stone-500 border border-stone-800 px-3 py-1 hover:border-blood"
+            >
+              ⏩ FAST-FORWARD TIME
+            </button>
+            <button
+              onClick={() => { setSecondsLeft(DAY_LENGTH); setHasTalisman(true); }}
+              className="glitch-target font-mono text-[10px] tracking-widest text-stone-500 border border-stone-800 px-3 py-1 hover:border-amber-rust"
+            >
+              ↺ RESET DAY
+            </button>
+            <button
+              onClick={onExit}
+              className="glitch-target font-mono text-[10px] tracking-widest text-stone-500 border border-stone-800 px-3 py-1 hover:border-stone-400"
+            >
+              ⏏ MAIN MENU
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ----------------- ROOT APP -----------------
+    function App() {
+      const [screen, setScreen] = useState('menu'); // 'menu' | 'game'
+
+      return screen === 'menu' ? (
+        <MainMenu onEnter={() => setScreen('game')} />
+      ) : (
+        <HUD onExit={() => setScreen('menu')} />
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
