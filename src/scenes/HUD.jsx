@@ -30,6 +30,8 @@ export default function HUD() {
   const food = useGameStore((s) => s.food);
   const toasts = useGameStore((s) => s.toasts);
   const keybinds = useGameStore((s) => s.keybinds);
+  const cameraMode = useGameStore((s) => s.settings.cameraMode);
+  const toggleCameraMode = useGameStore((s) => s.toggleCameraMode);
 
   const fastForward = useGameStore((s) => s.fastForward);
   const startGame = useGameStore((s) => s.startGame);
@@ -313,8 +315,19 @@ export default function HUD() {
       </div>
 
       {/* ---------- TOP RIGHT: minimap ---------- */}
-      <div className="absolute top-5 right-5">
+      <div className="absolute top-5 right-5 flex flex-col items-end gap-2">
         <Minimap />
+        {/* Quick first-/third-person switch (also bound to the camera key). */}
+        <button
+          onClick={toggleCameraMode}
+          title={`Switch view (${keyLabel(keybinds.camera)})`}
+          className="pointer-events-auto glitch-target flex items-center gap-1.5 border border-stone-700/60 bg-black/50 px-2 py-1 font-mono text-[9px] tracking-widest text-stone-300 hover:border-amber-rust hover:text-amber-rust"
+        >
+          <span className={cameraMode === 'fpp' ? 'text-amber-rust' : 'text-stone-600'}>1ST</span>
+          <span className="text-stone-700">/</span>
+          <span className={cameraMode === 'tpp' ? 'text-amber-rust' : 'text-stone-600'}>3RD</span>
+          <span className="ml-1 text-stone-600">[{keyLabel(keybinds.camera)}]</span>
+        </button>
       </div>
 
       {/* ---------- DEV / MOCK CONTROLS ---------- */}

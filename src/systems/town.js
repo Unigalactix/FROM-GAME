@@ -2,57 +2,40 @@
 // The world is a fixed-size top-down map; buildings are safe interiors you can
 // enter through a single door gap. Walls are solid; streets are open.
 
-export const WORLD = { w: 1800, h: 1200 };
+export const WORLD = { w: 1200, h: 800 };
 
 // Each building has an interior rect (x, y, w, h) and one door side. `paint`
 // tints the daytime walls; `roof` colours the pitched roof above it.
+// Faithful to the FROM town map: Colony House sits NW, the Clinic NE, and the
+// Matthews House / Sheriff's Office / Matthew's Diner / Church cluster rings a
+// central street. These four are the interiors you can actually enter.
 export const BUILDINGS = [
-  { name: 'HOUSE', x: 110, y: 90, w: 180, h: 140, door: 'bottom', paint: '#9a6b4a', roof: '#3a2418' },
-  { name: 'CHURCH', x: 610, y: 80, w: 230, h: 170, door: 'left', paint: '#8a8478', roof: '#2a2c30' },
-  { name: 'CLINIC', x: 120, y: 360, w: 180, h: 150, door: 'right', paint: '#9aa0a2', roof: '#36302a' },
-  { name: 'DINER', x: 560, y: 360, w: 250, h: 170, door: 'top', paint: '#7a8c84', roof: '#3a2a1a' },
+  { name: 'CLINIC', x: 960, y: 120, w: 190, h: 150, door: 'bottom', paint: '#9aa0a2', roof: '#36302a' },
+  { name: 'HOUSE', x: 600, y: 360, w: 180, h: 140, door: 'bottom', paint: '#9a6b4a', roof: '#3a2418' },
+  { name: 'CHURCH', x: 360, y: 560, w: 190, h: 160, door: 'right', paint: '#8a8478', roof: '#2a2c30' },
+  { name: 'DINER', x: 740, y: 550, w: 220, h: 150, door: 'top', paint: '#b0563a', roof: '#2a201a' },
 ];
 
 // Decorative houses that fill out the rest of the town. They are solid (you
 // cannot enter them) and exist mainly to make the map feel like a real,
 // inhabited town. `wh` is the wall height in metres; `roof` the roof colour.
 export const DECOR_HOUSES = [
-  // Right-hand blocks (the expanded east side of town)
-  { x: 960, y: 90, w: 140, h: 110, paint: '#8a5a44', roof: '#2a1c16', wh: 3.4 },
-  { x: 1180, y: 80, w: 150, h: 120, paint: '#5a6a72', roof: '#23282c', wh: 4.2 },
-  { x: 980, y: 300, w: 130, h: 120, paint: '#7d7350', roof: '#2c2616', wh: 3.2 },
-  { x: 1200, y: 300, w: 140, h: 110, paint: '#566b54', roof: '#1c241c', wh: 3.8 },
-  { x: 960, y: 500, w: 150, h: 120, paint: '#8a7d63', roof: '#2e271a', wh: 3.4 },
-  { x: 1190, y: 520, w: 140, h: 120, paint: '#6e4a48', roof: '#241a1a', wh: 4.0 },
-  { x: 880, y: 90, w: 90, h: 110, paint: '#5d5550', roof: '#222020', wh: 3.2 },
-  // Bottom blocks (the expanded south side of town)
-  { x: 120, y: 680, w: 150, h: 120, paint: '#5d5550', roof: '#222020', wh: 3.6 },
-  { x: 340, y: 700, w: 140, h: 110, paint: '#7a6a4a', roof: '#2a2418', wh: 3.2 },
-  { x: 560, y: 690, w: 150, h: 120, paint: '#5a6a72', roof: '#23282c', wh: 4.0 },
-  { x: 780, y: 700, w: 150, h: 120, paint: '#8a5a44', roof: '#2a1c16', wh: 3.4 },
-  { x: 1000, y: 710, w: 150, h: 120, paint: '#566b54', roof: '#1c241c', wh: 3.6 },
-  { x: 1220, y: 700, w: 140, h: 120, paint: '#7d7350', roof: '#2c2616', wh: 3.8 },
-  // Far southern row
-  { x: 240, y: 850, w: 150, h: 90, paint: '#6e4a48', roof: '#241a1a', wh: 3.0 },
-  { x: 520, y: 850, w: 160, h: 90, paint: '#8a7d63', roof: '#2e271a', wh: 3.2 },
-  { x: 840, y: 850, w: 150, h: 90, paint: '#5a6a72', roof: '#23282c', wh: 3.4 },
-  { x: 1120, y: 850, w: 160, h: 90, paint: '#7a6a4a', roof: '#2a2418', wh: 3.2 },
-  // West edge
-  { x: 20, y: 560, w: 90, h: 120, paint: '#7d7350', roof: '#2c2616', wh: 3.0 },
-  // The COLONY HOUSE — the big Victorian on the edge of town where most
-  // survivors shelter (the FROM landmark). Tall and unmistakable.
-  { name: 'COLONY HOUSE', x: 1500, y: 130, w: 250, h: 220, paint: '#6a6e74', roof: '#262a2e', wh: 6.6 },
-  // Far-east blocks (the new edge of town)
-  { x: 1520, y: 400, w: 150, h: 120, paint: '#5a6a72', roof: '#23282c', wh: 3.6 },
-  { x: 1540, y: 600, w: 150, h: 120, paint: '#8a7d63', roof: '#2e271a', wh: 4.0 },
-  { x: 1520, y: 810, w: 150, h: 120, paint: '#6e4a48', roof: '#241a1a', wh: 3.4 },
-  // New southern blocks
-  { x: 160, y: 1010, w: 150, h: 110, paint: '#7a6a4a', roof: '#2a2418', wh: 3.4 },
-  { x: 430, y: 1020, w: 150, h: 110, paint: '#566b54', roof: '#1c241c', wh: 3.2 },
-  { x: 700, y: 1010, w: 160, h: 120, paint: '#8a5a44', roof: '#2a1c16', wh: 3.8 },
-  { x: 980, y: 1020, w: 150, h: 110, paint: '#5d5550', roof: '#222020', wh: 3.4 },
-  { x: 1260, y: 1010, w: 150, h: 120, paint: '#5a6a72', roof: '#23282c', wh: 3.6 },
-  { x: 1530, y: 1020, w: 150, h: 110, paint: '#7d7350', roof: '#2c2616', wh: 3.2 },
+  // The COLONY HOUSE — the big Victorian on the NW edge where most survivors
+  // shelter (the FROM landmark). Tall and unmistakable.
+  { name: 'COLONY HOUSE', x: 110, y: 120, w: 240, h: 200, paint: '#6a6e74', roof: '#262a2e', wh: 6.8 },
+  // The Colony outbuildings
+  { name: 'SHED', x: 150, y: 40, w: 70, h: 55, paint: '#5d5550', roof: '#222020', wh: 2.6 },
+  { name: 'GREEN HOUSE', x: 400, y: 130, w: 120, h: 95, paint: '#566b54', roof: '#1c241c', wh: 3.4 },
+  { name: 'BLUE HOUSE', x: 560, y: 160, w: 110, h: 90, paint: '#4f6a86', roof: '#1c2632', wh: 3.4 },
+  { name: 'BARN', x: 820, y: 140, w: 120, h: 100, paint: '#7a3a2e', roof: '#241410', wh: 4.4 },
+  // East side
+  { name: 'BAR', x: 1000, y: 360, w: 120, h: 95, paint: '#7d7350', roof: '#2c2616', wh: 3.8 },
+  { name: 'ROOT CELLAR', x: 420, y: 370, w: 90, h: 70, paint: '#5a5048', roof: '#221c18', wh: 2.4 },
+  // Residences ringing the central street
+  { name: 'GREY HOUSE', x: 200, y: 420, w: 120, h: 95, paint: '#7a7c80', roof: '#26282c', wh: 3.4 },
+  { name: 'SHERIFF', x: 590, y: 560, w: 120, h: 90, paint: '#8a7d63', roof: '#2e271a', wh: 3.4 },
+  { name: 'MYERS', x: 990, y: 580, w: 110, h: 90, paint: '#8a5a44', roof: '#2a1c16', wh: 3.2 },
+  { name: 'LIU', x: 200, y: 600, w: 110, h: 95, paint: '#6e4a48', roof: '#241a1a', wh: 3.2 },
 ];
 
 const WALL = 10; // wall thickness

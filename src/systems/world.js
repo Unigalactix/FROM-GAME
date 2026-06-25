@@ -12,16 +12,12 @@ const byName = (name) => BUILDINGS.find((b) => b.name === name);
 // else in town entirely — the town's signature impossibility. Positions sit in
 // open ground (streets / squares) so you actually walk into them.
 export const PORTAL_TREES = [
-  { id: 'pt1', x: 430, y: 300 },
-  { id: 'pt2', x: 470, y: 640 },
-  { id: 'pt3', x: 900, y: 320 },
-  { id: 'pt4', x: 700, y: 560 },
-  { id: 'pt5', x: 1130, y: 560 },
-  { id: 'pt6', x: 360, y: 560 },
-  { id: 'pt7', x: 1350, y: 360 },
-  { id: 'pt8', x: 760, y: 980 },
-  { id: 'pt9', x: 1430, y: 700 },
-  { id: 'pt10', x: 1140, y: 1080 },
+  { id: 'pt1', x: 700, y: 250 },
+  { id: 'pt2', x: 540, y: 460 },
+  { id: 'pt3', x: 160, y: 400 },
+  { id: 'pt4', x: 1080, y: 480 },
+  { id: 'pt5', x: 350, y: 470 },
+  { id: 'pt6', x: 870, y: 330 },
 ];
 
 export const PORTAL_RADIUS = 18; // world units — how close you must step to trigger
@@ -56,8 +52,8 @@ export const NPCS = [
     id: 'tabitha',
     name: 'TABITHA',
     building: 'HOUSE',
-    x: 200,
-    y: 170,
+    x: 660,
+    y: 430,
     color: 0x6a7fb0,
     intro: [
       'You\u2019re new. I can tell \u2014 you still think the road out means something.',
@@ -77,8 +73,8 @@ export const NPCS = [
     id: 'kristi',
     name: 'KRISTI',
     building: 'CLINIC',
-    x: 210,
-    y: 430,
+    x: 1050,
+    y: 200,
     color: 0xb06a6a,
     intro: [
       'Don\u2019t bleed out on my floor, I\u2019m almost out of everything.',
@@ -98,8 +94,8 @@ export const NPCS = [
     id: 'khatri',
     name: 'FATHER KHATRI',
     building: 'CHURCH',
-    x: 720,
-    y: 165,
+    x: 440,
+    y: 630,
     color: 0xb0a06a,
     intro: [
       'The talismans are older than the town, or so the walls say.',
@@ -119,8 +115,8 @@ export const NPCS = [
     id: 'kenny',
     name: 'KENNY',
     building: 'DINER',
-    x: 685,
-    y: 445,
+    x: 850,
+    y: 620,
     color: 0x6ab08a,
     intro: [
       'Diner\u2019s still standing, so we still cook. Habits are all we\u2019ve got.',
@@ -141,8 +137,8 @@ export const NPCS = [
     id: 'thechild',
     name: 'THE CHILD',
     building: null,
-    x: 380,
-    y: 70,
+    x: 520,
+    y: 120,
     color: 0x9a9aa6,
     intro: [
       'A small figure stands at the treeline, humming a tune you almost recognize.',
@@ -167,8 +163,8 @@ export const LORE = [
     type: 'note',
     title: 'Torn Diary Page',
     building: 'HOUSE',
-    x: 150,
-    y: 200,
+    x: 640,
+    y: 460,
     text: 'Day 41. We boarded the windows again. The Matthews family answered the knock on night 39. We found the door open at dawn and the house empty. There is never any blood. That is the worst part.',
   },
   {
@@ -176,8 +172,8 @@ export const LORE = [
     type: 'photo',
     title: 'Faded Polaroid',
     building: 'HOUSE',
-    x: 255,
-    y: 120,
+    x: 740,
+    y: 400,
     text: 'A photograph of a family on a road trip, smiling beside a tour bus. Someone has scratched out the road behind them and written: "IT LOOPS. IT ALWAYS LOOPS."',
   },
   {
@@ -185,8 +181,8 @@ export const LORE = [
     type: 'note',
     title: 'Tally Marks',
     building: 'CLINIC',
-    x: 160,
-    y: 470,
+    x: 1000,
+    y: 230,
     text: 'Scratched into the clinic wall: hundreds of tally marks counting nights survived. The last cluster is smeared, as if the hand that made them was pulled away mid-stroke.',
   },
   {
@@ -194,8 +190,8 @@ export const LORE = [
     type: 'radio',
     title: 'Radio Static',
     building: 'DINER',
-    x: 600,
-    y: 400,
+    x: 910,
+    y: 600,
     text: 'The diner radio only finds one station. Beneath the static, a calm voice repeats: "...remain indoors... the talismans must be earned... do not trust the faces that smile after sunset..."',
   },
   {
@@ -203,8 +199,8 @@ export const LORE = [
     type: 'note',
     title: 'Half-Burned Sermon',
     building: 'CHURCH',
-    x: 660,
-    y: 110,
+    x: 400,
+    y: 600,
     text: 'A sermon, half consumed by fire: "...and the town is not a place but an appetite. We do not live here. We are kept here. Pray the talisman holds, for prayer alone never has."',
   },
   {
@@ -212,8 +208,8 @@ export const LORE = [
     type: 'photo',
     title: 'Child\u2019s Drawing',
     building: null,
-    x: 360,
-    y: 95,
+    x: 480,
+    y: 180,
     text: 'A crayon drawing pinned to a tree: stick figures with wide smiles standing around a small house. Above them, in shaky letters: "they only come inside if you let them."',
   },
 ];
@@ -221,15 +217,15 @@ export const LORE = [
 // ---------- Material nodes (scavenge points) ----------
 // kind: 'cloth' | 'bone' | 'wax' | 'wire'
 export const MATERIAL_NODES = [
-  { id: 'm_cloth1', kind: 'cloth', building: 'HOUSE', x: 130, y: 110 },
-  { id: 'm_cloth2', kind: 'cloth', building: 'CLINIC', x: 280, y: 380 },
-  { id: 'm_cloth3', kind: 'cloth', building: 'DINER', x: 780, y: 380 },
-  { id: 'm_bone1', kind: 'bone', building: 'CHURCH', x: 820, y: 100 },
-  { id: 'm_bone2', kind: 'bone', building: null, x: 410, y: 110 },
-  { id: 'm_wax1', kind: 'wax', building: 'CHURCH', x: 630, y: 230 },
-  { id: 'm_wax2', kind: 'wax', building: 'HOUSE', x: 270, y: 215 },
-  { id: 'm_wire1', kind: 'wire', building: 'DINER', x: 580, y: 510 },
-  { id: 'm_wire2', kind: 'wire', building: 'CLINIC', x: 135, y: 495 },
+  { id: 'm_cloth1', kind: 'cloth', building: 'HOUSE', x: 620, y: 400 },
+  { id: 'm_cloth2', kind: 'cloth', building: 'CLINIC', x: 1100, y: 240 },
+  { id: 'm_cloth3', kind: 'cloth', building: 'DINER', x: 800, y: 660 },
+  { id: 'm_bone1', kind: 'bone', building: 'CHURCH', x: 500, y: 680 },
+  { id: 'm_bone2', kind: 'bone', building: null, x: 520, y: 90 },
+  { id: 'm_wax1', kind: 'wax', building: 'CHURCH', x: 380, y: 660 },
+  { id: 'm_wax2', kind: 'wax', building: 'HOUSE', x: 760, y: 470 },
+  { id: 'm_wire1', kind: 'wire', building: 'DINER', x: 920, y: 560 },
+  { id: 'm_wire2', kind: 'wire', building: 'CLINIC', x: 980, y: 160 },
 ];
 
 // ---------- Daytime chores (tasks) ----------
@@ -243,8 +239,8 @@ export const TASKS = [
     label: 'Vegetable Garden',
     verb: 'Harvest Vegetables',
     color: 0x6ab06a,
-    x: 330,
-    y: 235,
+    x: 250,
+    y: 300,
     reward: { food: 2 },
   },
   {
@@ -252,8 +248,8 @@ export const TASKS = [
     label: 'Vegetable Garden',
     verb: 'Harvest Vegetables',
     color: 0x6ab06a,
-    x: 345,
-    y: 470,
+    x: 160,
+    y: 560,
     reward: { food: 2 },
   },
   {
@@ -261,8 +257,8 @@ export const TASKS = [
     label: 'Carpentry Bench',
     verb: 'Do Carpentry',
     color: 0xb0894a,
-    x: 470,
-    y: 470,
+    x: 870,
+    y: 420,
     reward: { materials: { wire: 1, wax: 1 } },
   },
   {
@@ -270,8 +266,8 @@ export const TASKS = [
     label: 'Water Well',
     verb: 'Draw Water',
     color: 0x5a8fb0,
-    x: 470,
-    y: 300,
+    x: 600,
+    y: 540,
     reward: { food: 1 },
   },
 ];

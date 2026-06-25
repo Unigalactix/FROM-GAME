@@ -23,7 +23,7 @@ export function getPhaseInfo(time) {
   return { phase: 'DAWN', index: PHASES.length - 1, phaseTimeLeft: 0 };
 }
 
-export const PLAYER_START = { x: 480, y: 545 };
+export const PLAYER_START = { x: 660, y: 760 };
 export const START_TALISMANS = 2;
 
 // Continuous daylight level 0..1 across the cycle, so lighting fades smoothly

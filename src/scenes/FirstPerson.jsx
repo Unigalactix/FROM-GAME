@@ -420,11 +420,11 @@ function Atmosphere() {
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
         shadow-camera-near={1}
-        shadow-camera-far={240}
-        shadow-camera-left={-70}
-        shadow-camera-right={70}
-        shadow-camera-top={70}
-        shadow-camera-bottom={-70}
+        shadow-camera-far={200}
+        shadow-camera-left={-55}
+        shadow-camera-right={55}
+        shadow-camera-top={55}
+        shadow-camera-bottom={-55}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
       />
@@ -744,6 +744,245 @@ function PortalTrees() {
       {PORTAL_TREES.map((p, i) => (
         <PortalTree key={p.id} p={p} idx={i} />
       ))}
+    </group>
+  );
+}
+
+// ---------- FROM landmarks: the diner sign, the bus, the ambulance, the jam ----------
+function makeSignTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 128;
+  const x = c.getContext('2d');
+  x.fillStyle = '#1a1410';
+  x.fillRect(0, 0, 256, 128);
+  x.strokeStyle = '#d83a2a';
+  x.lineWidth = 9;
+  x.strokeRect(7, 7, 242, 114);
+  x.fillStyle = '#f4ead2';
+  x.font = 'bold 56px Georgia, serif';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText('DINER', 128, 52);
+  x.fillStyle = '#e0a83a';
+  x.font = '18px Georgia, serif';
+  x.fillText('\u2605  GOOD EATS  \u2605', 128, 98);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+// A tall roadside sign in front of the diner, glowing faintly like old neon.
+function DinerSign() {
+  const tex = useMemo(() => makeSignTexture(), []);
+  return (
+    <group position={[wx(760), 0, wz(530)]}>
+      <mesh position={[0, 1.3, 0]} castShadow>
+        <cylinderGeometry args={[0.07, 0.09, 2.6, 8]} />
+        <meshStandardMaterial color="#23201b" roughness={1} />
+      </mesh>
+      <mesh position={[0, 2.85, 0]} castShadow>
+        <boxGeometry args={[2.0, 1.0, 0.12]} />
+        <meshStandardMaterial
+          map={tex}
+          emissiveMap={tex}
+          emissive="#ffffff"
+          emissiveIntensity={0.65}
+          roughness={0.7}
+        />
+      </mesh>
+      <pointLight position={[0, 2.85, 0.8]} color="#ffd9a0" intensity={0.5} distance={5} decay={2} />
+    </group>
+  );
+}
+
+// Four wheels for a vehicle whose body length runs along the X axis.
+function WheelsX({ halfLen = 1.8, halfWid = 1.0, r = 0.34, y = 0.35 }) {
+  const spots = [
+    [-halfLen, y, halfWid],
+    [halfLen, y, halfWid],
+    [-halfLen, y, -halfWid],
+    [halfLen, y, -halfWid],
+  ];
+  return (
+    <group>
+      {spots.map((p, i) => (
+        <mesh key={i} position={p} rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[r, r, 0.26, 12]} />
+          <meshStandardMaterial color="#0c0c0e" roughness={0.9} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// A single car. Body length runs along Z; the front (headlights) faces -Z.
+function Car({ color = '#7a2a26' }) {
+  return (
+    <group>
+      <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.8, 0.7, 4.0]} />
+        <meshStandardMaterial color={color} roughness={0.5} metalness={0.3} />
+      </mesh>
+      <mesh position={[0, 1.05, -0.2]} castShadow>
+        <boxGeometry args={[1.6, 0.6, 2.0]} />
+        <meshStandardMaterial color={color} roughness={0.5} metalness={0.3} />
+      </mesh>
+      <mesh position={[0, 1.06, -0.2]}>
+        <boxGeometry args={[1.64, 0.5, 2.04]} />
+        <meshStandardMaterial color="#10141a" roughness={0.2} metalness={0.6} />
+      </mesh>
+      {/* headlights (front = -Z) */}
+      {[-0.6, 0.6].map((hx) => (
+        <mesh key={hx} position={[hx, 0.55, -2.02]}>
+          <boxGeometry args={[0.3, 0.2, 0.06]} />
+          <meshStandardMaterial color="#fff4d0" emissive="#ffe9a8" emissiveIntensity={1.1} toneMapped={false} />
+        </mesh>
+      ))}
+      {/* taillights (rear = +Z) */}
+      {[-0.6, 0.6].map((tx) => (
+        <mesh key={tx} position={[tx, 0.55, 2.02]}>
+          <boxGeometry args={[0.3, 0.2, 0.06]} />
+          <meshStandardMaterial color="#5a0c0c" emissive="#c81818" emissiveIntensity={0.8} toneMapped={false} />
+        </mesh>
+      ))}
+      {[
+        [-0.95, 0.32, -1.3],
+        [0.95, 0.32, -1.3],
+        [-0.95, 0.32, 1.3],
+        [0.95, 0.32, 1.3],
+      ].map((p, i) => (
+        <mesh key={i} position={p} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.32, 0.32, 0.24, 12]} />
+          <meshStandardMaterial color="#0c0c0e" roughness={0.9} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// The cars that drive in during daylight and bunch up bumper-to-bumper on the
+// main street — nobody ever really leaves Nowhere.
+const JAM_LANE_Y = 525;
+const JAM_CARS = [
+  { slot: 720, color: '#8a2a24' },
+  { slot: 650, color: '#2a3a5a' },
+  { slot: 580, color: '#6a6a6e' },
+  { slot: 510, color: '#7a6a2a' },
+  { slot: 440, color: '#33332f' },
+];
+function TrafficJam() {
+  const refs = useRef([]);
+  const xs = useRef(JAM_CARS.map((_, i) => 1080 + i * 72)); // start off the east edge
+  useFrame((_, rawDt) => {
+    const dt = Math.min(0.05, rawDt);
+    const { time } = useGameStore.getState();
+    const light = dayLight(time);
+    const speed = 32 * Math.max(0, light - 0.08); // only creep forward in daylight
+    for (let i = 0; i < JAM_CARS.length; i++) {
+      const target = JAM_CARS[i].slot;
+      if (xs.current[i] > target) xs.current[i] = Math.max(target, xs.current[i] - speed * dt);
+      const g = refs.current[i];
+      if (g) g.position.set(wx(xs.current[i]), 0, wz(JAM_LANE_Y));
+    }
+  });
+  return (
+    <group>
+      {JAM_CARS.map((c, i) => (
+        <group key={i} ref={(el) => (refs.current[i] = el)} rotation={[0, Math.PI / 2, 0]}>
+          <Car color={c.color} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// The cream tour bus that brought a load of newcomers and never left.
+function Bus() {
+  return (
+    <group position={[wx(880), 0, wz(520)]}>
+      <mesh position={[0, 1.4, 0]} castShadow receiveShadow>
+        <boxGeometry args={[9, 2.0, 2.5]} />
+        <meshStandardMaterial color="#d8cda8" roughness={0.6} metalness={0.2} />
+      </mesh>
+      <mesh position={[0, 2.45, 0]} castShadow>
+        <boxGeometry args={[8.8, 0.3, 2.4]} />
+        <meshStandardMaterial color="#b8ad88" roughness={0.7} />
+      </mesh>
+      {[1.27, -1.27].map((z) => (
+        <mesh key={z} position={[0, 1.75, z]}>
+          <boxGeometry args={[8.2, 0.7, 0.04]} />
+          <meshStandardMaterial color="#12161c" roughness={0.2} metalness={0.6} />
+        </mesh>
+      ))}
+      <WheelsX halfLen={2.9} halfWid={1.1} r={0.42} y={0.42} />
+    </group>
+  );
+}
+
+// The town ambulance, light-bar dark, parked by the diner.
+function Ambulance() {
+  return (
+    <group position={[wx(900), 0, wz(330)]}>
+      <mesh position={[0, 1.1, 0]} castShadow receiveShadow>
+        <boxGeometry args={[5.4, 1.6, 2.3]} />
+        <meshStandardMaterial color="#e8e8e4" roughness={0.5} metalness={0.2} />
+      </mesh>
+      <mesh position={[-2.4, 0.7, 0]} castShadow>
+        <boxGeometry args={[0.9, 1.0, 2.2]} />
+        <meshStandardMaterial color="#e8e8e4" roughness={0.5} metalness={0.2} />
+      </mesh>
+      {/* red stripe */}
+      <mesh position={[0.4, 1.05, 1.16]}>
+        <boxGeometry args={[5.0, 0.34, 0.02]} />
+        <meshStandardMaterial color="#c01818" />
+      </mesh>
+      {/* red cross facing the street (+Z) */}
+      <mesh position={[1.3, 1.25, 1.17]}>
+        <planeGeometry args={[0.72, 0.72]} />
+        <meshStandardMaterial color="#c01818" />
+      </mesh>
+      <mesh position={[1.3, 1.25, 1.18]}>
+        <planeGeometry args={[0.46, 0.15]} />
+        <meshStandardMaterial color="#ffffff" />
+      </mesh>
+      <mesh position={[1.3, 1.25, 1.18]}>
+        <planeGeometry args={[0.15, 0.46]} />
+        <meshStandardMaterial color="#ffffff" />
+      </mesh>
+      {/* windscreen */}
+      <mesh position={[-2.4, 1.05, 0]}>
+        <boxGeometry args={[0.05, 0.5, 1.9]} />
+        <meshStandardMaterial color="#12161c" roughness={0.2} metalness={0.6} />
+      </mesh>
+      {/* light bar */}
+      <mesh position={[-1.4, 1.98, 0.4]}>
+        <boxGeometry args={[0.5, 0.16, 0.3]} />
+        <meshStandardMaterial color="#c81818" emissive="#ff2a2a" emissiveIntensity={1.3} toneMapped={false} />
+      </mesh>
+      <mesh position={[-1.4, 1.98, -0.4]}>
+        <boxGeometry args={[0.5, 0.16, 0.3]} />
+        <meshStandardMaterial color="#2a4ad8" emissive="#3a6aff" emissiveIntensity={1.3} toneMapped={false} />
+      </mesh>
+      <WheelsX halfLen={1.7} halfWid={1.0} r={0.36} y={0.36} />
+    </group>
+  );
+}
+
+// The Choosing Ceremony Stone — the weathered monolith where newcomers are
+// welcomed. A quiet FROM landmark on the west side of the street.
+function ChoosingStone() {
+  return (
+    <group position={[wx(300), 0, wz(545)]}>
+      <mesh position={[0, 0.05, 0]} receiveShadow>
+        <cylinderGeometry args={[0.85, 0.95, 0.12, 10]} />
+        <meshStandardMaterial color="#4a463f" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.95, 0]} rotation={[0.04, 0.3, 0.06]} castShadow receiveShadow>
+        <boxGeometry args={[0.7, 1.8, 0.34]} />
+        <meshStandardMaterial color="#6b6660" roughness={1} />
+      </mesh>
     </group>
   );
 }
@@ -1231,7 +1470,7 @@ export default function FirstPerson() {
     <Canvas
       shadows={quality === 'high' ? 'soft' : false}
       dpr={[1, dpr]}
-      camera={{ fov: 75, near: 0.05, far: 160, position: start }}
+      camera={{ fov: 75, near: 0.05, far: 140, position: start }}
       gl={{
         antialias: quality !== 'low',
         toneMapping: THREE.ACESFilmicToneMapping,
@@ -1253,6 +1492,11 @@ export default function FirstPerson() {
       <HideSpots />
       <Forest />
       <PortalTrees />
+      <DinerSign />
+      <Bus />
+      <Ambulance />
+      <ChoosingStone />
+      <TrafficJam />
       <Survivors />
       <LorePickups />
       <MaterialPickups />
