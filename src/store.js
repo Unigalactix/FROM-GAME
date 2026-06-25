@@ -52,15 +52,86 @@ import {
 
 const SAVE_KEY = 'nowhere-town-save-v1';
 const SETTINGS_KEY = 'nowhere-town-settings-v1';
+const KEYBINDS_KEY = 'nowhere-town-keys-v1';
 
 function defaultSettings() {
   return {
     masterVolume: 70, // 0..100
     brightness: 50, // 0..100 (50 = neutral)
     sensitivity: 50, // 0..100 (50 = 1x mouse look)
+    quality: 'high', // 'low' | 'medium' | 'high'
+    cameraMode: 'fpp', // 'fpp' (first-person) | 'tpp' (third-person)
     reduceMotion: false, // disables grain/shake/head-bob
     subtitles: true,
   };
+}
+
+// ---- Remappable controls ----
+// Each action maps to a KeyboardEvent.code. Arrow keys remain hard-wired as a
+// secondary movement fallback in the controller.
+export const KEY_ACTIONS = [
+  { id: 'forward', label: 'Move Forward' },
+  { id: 'back', label: 'Move Back' },
+  { id: 'left', label: 'Move Left' },
+  { id: 'right', label: 'Move Right' },
+  { id: 'sneak', label: 'Sneak' },
+  { id: 'breath', label: 'Hold Breath' },
+  { id: 'interact', label: 'Interact' },
+  { id: 'hide', label: 'Hide / Stand' },
+  { id: 'ward', label: 'Hang Talisman' },
+  { id: 'lantern', label: 'Toggle Lantern' },
+  { id: 'journal', label: 'Journal' },
+  { id: 'craft', label: 'Crafting' },
+  { id: 'bandage', label: 'Use Bandage' },
+  { id: 'eat', label: 'Eat Food' },
+  { id: 'camera', label: 'Toggle View (1st/3rd)' },
+];
+
+function defaultKeybinds() {
+  return {
+    forward: 'KeyW',
+    back: 'KeyS',
+    left: 'KeyA',
+    right: 'KeyD',
+    sneak: 'ShiftLeft',
+    breath: 'Space',
+    interact: 'KeyG',
+    hide: 'KeyC',
+    ward: 'KeyE',
+    lantern: 'KeyF',
+    journal: 'KeyJ',
+    craft: 'KeyK',
+    bandage: 'KeyH',
+    eat: 'KeyB',
+    camera: 'KeyV',
+  };
+}
+
+function loadKeybinds() {
+  try {
+    const raw = localStorage.getItem(KEYBINDS_KEY);
+    if (!raw) return defaultKeybinds();
+    return { ...defaultKeybinds(), ...JSON.parse(raw) };
+  } catch {
+    return defaultKeybinds();
+  }
+}
+
+function saveKeybinds(k) {
+  try {
+    localStorage.setItem(KEYBINDS_KEY, JSON.stringify(k));
+  } catch {
+    /* ignore */
+  }
+}
+
+// Human-readable label for a KeyboardEvent.code (for HUD hints + settings).
+export function keyLabel(code) {
+  if (!code) return '—';
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Arrow')) return { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' }[code];
+  return { ShiftLeft: 'L-Shift', ShiftRight: 'R-Shift', Space: 'Space', ControlLeft: 'L-Ctrl', ControlRight: 'R-Ctrl' }[code] || code;
 }
 
 function loadSettings() {
@@ -129,6 +200,7 @@ function nightState() {
   return {
     status: 'playing',
     time: 0,
+    paused: false,
     health: 100,
     player: { ...PLAYER_START },
     playerYaw: -Math.PI / 2, // facing heading, fed by the FP controller for the minimap
@@ -150,7 +222,7 @@ function nightState() {
     activeDialogue: null,
     showJournal: false,
     showCraft: false,
-    toast: null,
+    toasts: [], // queue of transient messages { id, text }
   };
 }
 
@@ -173,6 +245,34 @@ export const useGameStore = create((set, get) => ({
       saveSettings(settings);
       return { settings };
     }),
+  // Flip between first- and third-person view (persisted).
+  toggleCameraMode: () =>
+    set((s) => {
+      const settings = { ...s.settings, cameraMode: s.settings.cameraMode === 'tpp' ? 'fpp' : 'tpp' };
+      saveSettings(settings);
+      return { settings };
+    }),
+
+  // ---- Remappable controls ----
+  keybinds: loadKeybinds(),
+  setKeybind: (action, code) =>
+    set((s) => {
+      // Clear this code from any other action so a key is never double-bound.
+      const keybinds = { ...s.keybinds };
+      for (const a in keybinds) if (keybinds[a] === code) keybinds[a] = null;
+      keybinds[action] = code;
+      saveKeybinds(keybinds);
+      return { keybinds };
+    }),
+  resetKeybinds: () => {
+    const keybinds = defaultKeybinds();
+    saveKeybinds(keybinds);
+    set({ keybinds });
+  },
+
+  // ---- In-game pause ----
+  setPaused: (paused) => set({ paused }),
+  togglePause: () => set((s) => ({ paused: s.status === 'playing' ? !s.paused : false })),
 
   // ---- Persistent progression ----
   ...defaultProgress(),
@@ -217,13 +317,12 @@ export const useGameStore = create((set, get) => ({
       stamina: s.holding ? Math.max(0, s.stamina - 3) : Math.min(100, s.stamina + 1.5),
     })),
 
-  // ---- Transient toast message ----
+  // ---- Transient toast messages (small fading queue, newest at the bottom) ----
   showToast: (text) => {
     const id = ++toastSeq;
-    set({ toast: { id, text } });
+    set((s) => ({ toasts: [...s.toasts, { id, text }].slice(-4) }));
     setTimeout(() => {
-      const cur = get().toast;
-      if (cur && cur.id === id) set({ toast: null });
+      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
     }, 2800);
   },
 

@@ -95,17 +95,18 @@
 
 ---
 
-## Phase 6 — Save System, Settings & Release
+## Phase 6 — Save System, Settings & Release ✅ DONE (engineering)
 **Goal:** Ship it.
 
-- [ ] Save/load (LocalStorage for web build, or file-based for desktop).
-- [ ] Full settings: audio, controls remapping, graphics quality.
-- [ ] Performance pass (asset loading, LODs, draw-call reduction).
-- [ ] Build targets: itch.io / GitHub Pages (web), optional **Electron/Tauri** desktop build.
-- [ ] Playtesting, balancing, bug-fix pass.
-- [ ] Trailer + store page.
+- [x] Save/load (LocalStorage: progression, settings, and keybinds all persisted across sessions).
+- [x] Full settings: audio volume, brightness, sensitivity, graphics quality (Low/Med/High), reduce-motion, subtitles, **controls remapping**.
+- [x] Performance pass: code-split Three.js / R3F / React into separate chunks + lazy-load the 3D game (initial bundle ~1 MB → ~30 KB; Three.js fetched only on Enter Town).
+- [x] In-game pause menu (Esc): Resume / Settings / Restart Day / Main Menu.
+- [x] Build target: GitHub Pages (`npm run deploy`). Desktop (Electron/Tauri) left as an optional future wrapper.
+- [ ] Playtesting / balancing pass (ongoing).
+- [ ] Trailer + store page (non-engineering, deferred).
 
-**Deliverable:** A complete, releasable game.
+**Deliverable:** A complete, releasable web game.
 
 ---
 

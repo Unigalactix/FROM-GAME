@@ -5,4 +5,18 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: '/FROM-GAME/',
+  build: {
+    // Split the heavy 3D/vendor code out of the main bundle so the menu loads
+    // fast and Three.js is fetched only when the player enters town.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ['three'],
+          r3f: ['@react-three/fiber'],
+          react: ['react', 'react-dom'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 900,
+  },
 });

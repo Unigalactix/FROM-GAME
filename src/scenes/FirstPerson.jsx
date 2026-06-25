@@ -6,8 +6,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useGameStore, getPhaseInfo, dayLight } from '../store.js';
-import { WORLD, BUILDINGS, WALLS, HIDE_SPOTS } from '../systems/town.js';
+import { useGameStore, getPhaseInfo, dayLight, PLAYER_START } from '../store.js';
+import { WORLD, BUILDINGS, WALLS, HIDE_SPOTS, DECOR_HOUSES } from '../systems/town.js';
 import { ENEMY_R } from '../systems/enemies.js';
 import { advance } from '../systems/sim.js';
 import {
@@ -16,6 +16,9 @@ import {
   MATERIAL_NODES,
   MATERIAL_COLORS,
   TASKS,
+  PORTAL_TREES,
+  PORTAL_RADIUS,
+  randomTeleportTarget,
   nearestNpc,
   nearestLore,
   nearestMaterial,
@@ -28,45 +31,167 @@ import {
   footstep,
   stinger,
 } from '../systems/audio.js';
+import { surface } from '../systems/textures.js';
 
 const S = 0.06; // world-units -> meters
 const WALL_H = 3.2; // wall height (m)
 const EYE = 1.7; // standing eye height (m)
 const CROUCH_EYE = 0.85; // eye height while hidden
 const BATTERY_DRAIN = 1.6; // %/s while lantern is on
+const JUMP_V = 4.2; // initial jump velocity (m/s)
+const GRAVITY = 12; // m/s^2
 
 const wx = (x) => x * S;
 const wz = (y) => y * S;
 
+// Shared, mutable transform + animation state written by the Player controller
+// and read by the third-person avatar each frame (no React re-renders).
+const avatar = {
+  x: PLAYER_START.x,
+  z: PLAYER_START.y,
+  yaw: -Math.PI / 2,
+  yOff: 0, // vertical offset from a jump
+  vy: 0, // vertical velocity
+  phase: 0, // gait phase for limb swing
+  speed: 0, // 0..1 movement magnitude
+  running: false,
+  grounded: true,
+  hidden: false,
+  mode: 'fpp',
+  status: 'playing',
+  dead: 0, // collapse progress 0..1
+};
+
 // ---------- World geometry ----------
 function Ground() {
+  const { map, bumpMap } = useMemo(
+    () => surface('ground', wx(WORLD.w) / 3, wz(WORLD.h) / 3),
+    []
+  );
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[wx(WORLD.w / 2), 0, wz(WORLD.h / 2)]} receiveShadow>
       <planeGeometry args={[wx(WORLD.w), wz(WORLD.h)]} />
-      <meshStandardMaterial color="#0c0b0d" roughness={1} />
+      <meshStandardMaterial map={map} bumpMap={bumpMap} bumpScale={0.04} roughness={1} />
     </mesh>
   );
 }
 
 function Walls() {
+  const cache = useMemo(() => new Map(), []);
+  // The painted plaster reads as colour by day and is swallowed by night.
+  const matFor = (w) => {
+    const rx = Math.max(1, Math.round(wx(Math.max(w.w, w.h)) / 2));
+    const ry = Math.max(1, Math.round(WALL_H / 2));
+    const paint = w.paint || '#9a8c78';
+    const key = `${rx}x${ry}|${paint}`;
+    let m = cache.get(key);
+    if (!m) {
+      const { bumpMap } = surface('wall', rx, ry);
+      m = new THREE.MeshStandardMaterial({ color: paint, bumpMap, bumpScale: 0.06, roughness: 0.9 });
+      cache.set(key, m);
+    }
+    return m;
+  };
+  const solid = WALLS.filter((w) => !w.decor);
   return (
     <group>
-      {WALLS.map((w, i) => (
+      {solid.map((w, i) => (
         <mesh
           key={i}
           position={[wx(w.x + w.w / 2), WALL_H / 2, wz(w.y + w.h / 2)]}
+          material={matFor(w)}
           castShadow
           receiveShadow
         >
           <boxGeometry args={[wx(w.w), WALL_H, wz(w.h)]} />
-          <meshStandardMaterial color="#26221d" roughness={0.95} />
         </mesh>
       ))}
     </group>
   );
 }
 
+// ---------- Pitched roofs + decorative town houses ----------
+function Roof({ cx, cz, w, d, base, color }) {
+  const sx = (wx(w) / 2) * 1.485; // π/4-rotated square reaches the wall plane (+ eaves)
+  const sz = (wz(d) / 2) * 1.485;
+  const roofH = Math.max(0.8, Math.min(1.9, Math.min(wx(w), wz(d)) * 0.45));
+  return (
+    <mesh
+      position={[cx, base + roofH / 2, cz]}
+      rotation={[0, Math.PI / 4, 0]}
+      scale={[sx, roofH, sz]}
+      castShadow
+      receiveShadow
+    >
+      <coneGeometry args={[1, 1, 4]} />
+      <meshStandardMaterial color={color} roughness={0.85} flatShading />
+    </mesh>
+  );
+}
+
+// Roofs over the four enterable buildings.
+function Roofs() {
+  return (
+    <group>
+      {BUILDINGS.map((b) => (
+        <Roof
+          key={b.name}
+          cx={wx(b.x + b.w / 2)}
+          cz={wz(b.y + b.h / 2)}
+          w={b.w}
+          d={b.h}
+          base={WALL_H}
+          color={b.roof}
+        />
+      ))}
+    </group>
+  );
+}
+
+// The solid, colourful background houses that fill out the rest of the town.
+function DecorTown() {
+  const bump = useMemo(() => surface('wall', 2, 2).bumpMap, []);
+  const mats = useMemo(() => new Map(), []);
+  const matFor = (paint) => {
+    let m = mats.get(paint);
+    if (!m) {
+      m = new THREE.MeshStandardMaterial({ color: paint, bumpMap: bump, bumpScale: 0.05, roughness: 0.9 });
+      mats.set(paint, m);
+    }
+    return m;
+  };
+  return (
+    <group>
+      {DECOR_HOUSES.map((h, i) => {
+        const cx = wx(h.x + h.w / 2);
+        const cz = wz(h.y + h.h / 2);
+        return (
+          <group key={i}>
+            <mesh position={[cx, h.wh / 2, cz]} material={matFor(h.paint)} castShadow receiveShadow>
+              <boxGeometry args={[wx(h.w), h.wh, wz(h.h)]} />
+            </mesh>
+            <Roof cx={cx} cz={cz} w={h.w} d={h.h} base={h.wh} color={h.roof} />
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 function BuildingFloors() {
+  const cache = useMemo(() => new Map(), []);
+  const matFor = (b) => {
+    const rx = Math.max(1, Math.round(wx(b.w) / 2.5));
+    const ry = Math.max(1, Math.round(wz(b.h) / 2.5));
+    const key = `${rx}x${ry}`;
+    let m = cache.get(key);
+    if (!m) {
+      const { map, bumpMap } = surface('floor', rx, ry);
+      m = new THREE.MeshStandardMaterial({ map, bumpMap, bumpScale: 0.06, roughness: 0.9 });
+      cache.set(key, m);
+    }
+    return m;
+  };
   return (
     <group>
       {BUILDINGS.map((b) => (
@@ -74,10 +199,10 @@ function BuildingFloors() {
           key={b.name}
           rotation={[-Math.PI / 2, 0, 0]}
           position={[wx(b.x + b.w / 2), 0.02, wz(b.y + b.h / 2)]}
+          material={matFor(b)}
           receiveShadow
         >
           <planeGeometry args={[wx(b.w), wz(b.h)]} />
-          <meshStandardMaterial color="#18130f" roughness={1} />
         </mesh>
       ))}
     </group>
@@ -86,12 +211,15 @@ function BuildingFloors() {
 
 // A simple crate marking each hide spot.
 function HideSpots() {
+  const mat = useMemo(() => {
+    const { map, bumpMap } = surface('floor', 1, 1);
+    return new THREE.MeshStandardMaterial({ map, bumpMap, bumpScale: 0.05, roughness: 1 });
+  }, []);
   return (
     <group>
       {HIDE_SPOTS.map((h) => (
-        <mesh key={h.name} position={[wx(h.x), 0.4, wz(h.y)]} castShadow>
+        <mesh key={h.name} position={[wx(h.x), 0.4, wz(h.y)]} material={mat} castShadow receiveShadow>
           <boxGeometry args={[0.8, 0.8, 0.8]} />
-          <meshStandardMaterial color="#2c2620" roughness={1} />
         </mesh>
       ))}
     </group>
@@ -146,11 +274,23 @@ function makeFigure() {
 
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.5, 10), bodyMat);
   body.position.y = 0.95;
+  body.castShadow = true;
   root.add(body);
 
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 14), bodyMat);
   head.position.y = 1.85;
+  head.castShadow = true;
   root.add(head);
+
+  // Long, gaunt arms hanging at unnatural length.
+  const mkArm = (s) => {
+    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.035, 1.2, 6), bodyMat);
+    a.position.set(s * 0.3, 0.95, 0.02);
+    a.rotation.z = s * 0.1;
+    a.castShadow = true;
+    return a;
+  };
+  root.add(mkArm(-1), mkArm(1));
 
   const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8);
   const mkEye = () =>
@@ -229,6 +369,11 @@ function Atmosphere() {
 
   useEffect(() => {
     scene.fog = new THREE.FogExp2(0x05040a, 0.012);
+    // Aim the sun/moon shadow at the town centre so cast shadows cover it.
+    if (sun.current) {
+      sun.current.target.position.set(wx(WORLD.w / 2), 0, wz(WORLD.h / 2));
+      scene.add(sun.current.target);
+    }
     return () => {
       scene.fog = null;
     };
@@ -271,6 +416,17 @@ function Atmosphere() {
         position={[wx(WORLD.w * 0.7), 60, wz(WORLD.h * 0.2)]}
         intensity={0.6}
         color="#cdd2da"
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-near={1}
+        shadow-camera-far={240}
+        shadow-camera-left={-70}
+        shadow-camera-right={70}
+        shadow-camera-top={70}
+        shadow-camera-bottom={-70}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.02}
       />
     </>
   );
@@ -316,22 +472,76 @@ function Flashlight() {
 }
 
 // ---------- Survivors, lore, materials, forest (Phase 4) ----------
+const NPC_SKIN = '#c79c76';
+const NPC_HAIR = '#241a14';
+const NPC_PANTS = '#2c2824';
+const NPC_BOOT = '#15110d';
+
+// A townsperson rendered as a real, clothed human: jacket (their signature
+// colour), trousers, boots, hands, head and hair, lit by their own candle.
+function NpcFigure({ n }) {
+  const jacket = n.color;
+  return (
+    <group position={[wx(n.x), 0, wz(n.y)]} rotation={[0, n.face ?? 0, 0]}>
+      {/* legs + boots */}
+      <mesh position={[-0.12, 0.38, 0]} castShadow>
+        <capsuleGeometry args={[0.1, 0.5, 4, 8]} />
+        <meshStandardMaterial color={NPC_PANTS} roughness={1} />
+      </mesh>
+      <mesh position={[0.12, 0.38, 0]} castShadow>
+        <capsuleGeometry args={[0.1, 0.5, 4, 8]} />
+        <meshStandardMaterial color={NPC_PANTS} roughness={1} />
+      </mesh>
+      <mesh position={[-0.12, 0.06, 0.05]} castShadow>
+        <boxGeometry args={[0.16, 0.12, 0.26]} />
+        <meshStandardMaterial color={NPC_BOOT} roughness={1} />
+      </mesh>
+      <mesh position={[0.12, 0.06, 0.05]} castShadow>
+        <boxGeometry args={[0.16, 0.12, 0.26]} />
+        <meshStandardMaterial color={NPC_BOOT} roughness={1} />
+      </mesh>
+      {/* torso jacket */}
+      <mesh position={[0, 1.0, 0]} castShadow>
+        <capsuleGeometry args={[0.22, 0.6, 4, 12]} />
+        <meshStandardMaterial color={jacket} roughness={0.85} />
+      </mesh>
+      {/* arms + hands */}
+      <mesh position={[-0.3, 1.05, 0]} rotation={[0, 0, 0.08]} castShadow>
+        <capsuleGeometry args={[0.08, 0.6, 4, 8]} />
+        <meshStandardMaterial color={jacket} roughness={0.9} />
+      </mesh>
+      <mesh position={[0.3, 1.05, 0]} rotation={[0, 0, -0.08]} castShadow>
+        <capsuleGeometry args={[0.08, 0.6, 4, 8]} />
+        <meshStandardMaterial color={jacket} roughness={0.9} />
+      </mesh>
+      <mesh position={[-0.34, 0.72, 0]} castShadow>
+        <sphereGeometry args={[0.08, 8, 8]} />
+        <meshStandardMaterial color={NPC_SKIN} roughness={0.9} />
+      </mesh>
+      <mesh position={[0.34, 0.72, 0]} castShadow>
+        <sphereGeometry args={[0.08, 8, 8]} />
+        <meshStandardMaterial color={NPC_SKIN} roughness={0.9} />
+      </mesh>
+      {/* head + hair */}
+      <mesh position={[0, 1.62, 0]} castShadow>
+        <sphereGeometry args={[0.18, 16, 16]} />
+        <meshStandardMaterial color={NPC_SKIN} roughness={0.85} />
+      </mesh>
+      <mesh position={[0, 1.7, -0.02]} castShadow>
+        <sphereGeometry args={[0.19, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.62]} />
+        <meshStandardMaterial color={NPC_HAIR} roughness={1} />
+      </mesh>
+      {/* survivors keep a candle burning so you can find them */}
+      <pointLight position={[0, 1.95, 0]} color="#ffcf8a" intensity={0.75} distance={5} decay={2} />
+    </group>
+  );
+}
+
 function Survivors() {
   return (
     <group>
       {NPCS.map((n) => (
-        <group key={n.id} position={[wx(n.x), 0, wz(n.y)]}>
-          <mesh position={[0, 0.85, 0]} castShadow>
-            <cylinderGeometry args={[0.22, 0.32, 1.4, 10]} />
-            <meshStandardMaterial color={n.color} roughness={0.9} />
-          </mesh>
-          <mesh position={[0, 1.75, 0]} castShadow>
-            <sphereGeometry args={[0.24, 14, 14]} />
-            <meshStandardMaterial color={n.color} roughness={0.9} />
-          </mesh>
-          {/* survivors keep a candle burning so you can find them */}
-          <pointLight position={[0, 1.9, 0]} color="#ffcf8a" intensity={0.8} distance={5} decay={2} />
-        </group>
+        <NpcFigure key={n.id} n={n} />
       ))}
     </group>
   );
@@ -417,10 +627,12 @@ function Tasks() {
 }
 
 function Forest() {
+  const quality = useGameStore((s) => s.settings.quality);
   const trees = useMemo(() => {
+    const count = { low: 22, medium: 42, high: 64 }[quality] || 64;
     const arr = [];
     const R = Math.random;
-    for (let i = 0; i < 64; i++) {
+    for (let i = 0; i < count; i++) {
       let x;
       let y;
       const side = Math.floor(R() * 4);
@@ -437,23 +649,100 @@ function Forest() {
         x = -30 - R() * 140;
         y = R() * WORLD.h;
       }
-      arr.push({ x, y, h: 2.4 + R() * 2.4 });
+      arr.push({ x, y, h: 2.4 + R() * 2.4, rot: R() * Math.PI * 2, lean: (R() - 0.5) * 0.16, kind: R(), ci: Math.floor(R() * 4) });
     }
     return arr;
-  }, []);
+  }, [quality]);
+  const greens = ['#3f5a2a', '#4a6b30', '#557a30', '#3a5326'];
+  const autumn = ['#8a5a22', '#9a6a26', '#a85f24', '#7a4a1f'];
   return (
     <group>
-      {trees.map((t, i) => (
-        <group key={i} position={[wx(t.x), 0, wz(t.y)]}>
-          <mesh position={[0, t.h * 0.25, 0]}>
-            <cylinderGeometry args={[0.12, 0.2, t.h * 0.5, 6]} />
-            <meshStandardMaterial color="#18120d" roughness={1} />
-          </mesh>
-          <mesh position={[0, t.h * 0.7, 0]}>
-            <coneGeometry args={[0.85, t.h, 7]} />
-            <meshStandardMaterial color="#0b150b" roughness={1} />
-          </mesh>
-        </group>
+      {trees.map((t, i) => {
+        const decid = t.kind > 0.58;
+        const fol = (decid ? autumn : greens)[t.ci];
+        const trunk = decid ? '#4a3624' : '#33271a';
+        return (
+          <group key={i} position={[wx(t.x), 0, wz(t.y)]} rotation={[t.lean, t.rot, t.lean]}>
+            <mesh position={[0, t.h * 0.25, 0]} castShadow>
+              <cylinderGeometry args={[0.12, 0.2, t.h * 0.5, 6]} />
+              <meshStandardMaterial color={trunk} roughness={1} />
+            </mesh>
+            {decid ? (
+              <mesh position={[0, t.h * 0.72, 0]} castShadow>
+                <sphereGeometry args={[t.h * 0.42, 10, 8]} />
+                <meshStandardMaterial color={fol} roughness={1} flatShading />
+              </mesh>
+            ) : (
+              <mesh position={[0, t.h * 0.7, 0]} castShadow>
+                <coneGeometry args={[0.85, t.h, 7]} />
+                <meshStandardMaterial color={fol} roughness={1} />
+              </mesh>
+            )}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+// ---------- The trees that fold the road (teleporters) ----------
+const PORTAL_COLOR = '#3fb0a4'; // eerie phosphor teal
+function PortalTree({ p, idx }) {
+  const glow = useRef();
+  const ring = useRef();
+  const light = useRef();
+  useFrame(() => {
+    const t = performance.now() * 0.001 + idx * 1.7;
+    const pulse = 0.5 + Math.sin(t * 1.6) * 0.5; // 0..1
+    if (glow.current) glow.current.emissiveIntensity = 0.8 + pulse * 2.2;
+    if (light.current) light.current.intensity = 0.5 + pulse * 1.3;
+    if (ring.current) {
+      ring.current.rotation.z += 0.012;
+      ring.current.material.opacity = 0.22 + pulse * 0.5;
+    }
+  });
+  return (
+    <group position={[wx(p.x), 0, wz(p.y)]}>
+      {/* glowing sigil ring scribed on the ground — marks the threshold */}
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+        <ringGeometry args={[0.7, 1.05, 32]} />
+        <meshBasicMaterial color={PORTAL_COLOR} transparent opacity={0.4} side={THREE.DoubleSide} />
+      </mesh>
+      {/* gnarled, leaning trunk */}
+      <mesh position={[0, 1.3, 0]} rotation={[0, 0, 0.06]} castShadow>
+        <cylinderGeometry args={[0.17, 0.36, 2.6, 7]} />
+        <meshStandardMaterial color="#160f0a" roughness={1} flatShading />
+      </mesh>
+      <mesh position={[0.16, 2.5, 0]} rotation={[0, 0, -0.5]} castShadow>
+        <cylinderGeometry args={[0.08, 0.16, 1.3, 6]} />
+        <meshStandardMaterial color="#160f0a" roughness={1} />
+      </mesh>
+      {/* carved glowing band around the trunk */}
+      <mesh ref={glow} position={[0, 1.45, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.33, 0.07, 8, 24]} />
+        <meshStandardMaterial
+          color={PORTAL_COLOR}
+          emissive={PORTAL_COLOR}
+          emissiveIntensity={1.6}
+          toneMapped={false}
+          roughness={0.5}
+        />
+      </mesh>
+      {/* twisted, near-black canopy */}
+      <mesh position={[0, 3.3, 0]} castShadow>
+        <sphereGeometry args={[1.05, 10, 8]} />
+        <meshStandardMaterial color="#0c150f" roughness={1} flatShading />
+      </mesh>
+      <pointLight ref={light} position={[0, 1.7, 0]} color={PORTAL_COLOR} intensity={0.9} distance={7} decay={2} />
+    </group>
+  );
+}
+
+function PortalTrees() {
+  return (
+    <group>
+      {PORTAL_TREES.map((p, i) => (
+        <PortalTree key={p.id} p={p} idx={i} />
       ))}
     </group>
   );
@@ -494,6 +783,13 @@ function Player() {
   const lastHealth = useRef(100);
   const shake = useRef(0);
   const prevChasing = useRef(false);
+  const vy = useRef(0); // jump vertical velocity
+  const py = useRef(0); // jump vertical offset
+  const grounded = useRef(true);
+  const prevSpace = useRef(false);
+  const prevV = useRef(false);
+  const deadT = useRef(0);
+  const portalCD = useRef(0); // teleport cooldown so arrivals don't chain
 
   // Mouse look while pointer is locked (sensitivity from settings).
   useEffect(() => {
@@ -530,6 +826,7 @@ function Player() {
     const st = useGameStore.getState();
     const k = keys.current;
     const api = useGameStore.getState();
+    const kb = st.keybinds;
 
     // ---- Look orientation ----
     camera.rotation.order = 'YXZ';
@@ -543,27 +840,31 @@ function Player() {
       return hit;
     };
 
-    // ---- UI toggles & item use (work even while paused so panels can close) ----
-    if (edge('KeyJ', prevJ)) api.toggleJournal();
-    if (edge('KeyK', prevK)) api.toggleCraft();
-    if (edge('KeyH', prevH)) api.useBandage();
-    if (edge('KeyB', prevB)) api.eatFood();
+    // ---- UI toggles & item use (work while panels are open so they can close) ----
+    if (!st.paused) {
+      if (edge(kb.journal, prevJ)) api.toggleJournal();
+      if (edge(kb.craft, prevK)) api.toggleCraft();
+      if (edge(kb.bandage, prevH)) api.useBandage();
+      if (edge(kb.eat, prevB)) api.eatFood();
+      if (edge(kb.camera, prevV)) api.toggleCameraMode();
+    }
 
-    // ---- Lantern toggle (F) ----
-    const fDown = k.has('KeyF');
+    // ---- Lantern toggle ----
+    const fDown = k.has(kb.lantern);
     let lanternOn = st.lanternOn;
-    if (fDown && !prevF.current) lanternOn = !lanternOn;
+    if (fDown && !prevF.current && !st.paused) lanternOn = !lanternOn;
     prevF.current = fDown;
 
-    const paused = !!(st.activeDialogue || st.showJournal || st.showCraft || st.readingLore);
+    const paused =
+      st.paused || !!(st.activeDialogue || st.showJournal || st.showCraft || st.readingLore);
 
     if (st.status === 'playing' && !paused) {
-      // Interact (G): talk / read lore / scavenge.
-      if (edge('KeyG', prevG)) api.interact();
+      // Interact: talk / read lore / scavenge / work chores.
+      if (edge(kb.interact, prevG)) api.interact();
 
       // ---- Desired movement in world space, relative to camera yaw ----
-      const fz = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
-      const fx = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
+      const fz = (k.has(kb.forward) || k.has('ArrowUp') ? 1 : 0) - (k.has(kb.back) || k.has('ArrowDown') ? 1 : 0);
+      const fx = (k.has(kb.right) || k.has('ArrowRight') ? 1 : 0) - (k.has(kb.left) || k.has('ArrowLeft') ? 1 : 0);
       const fwdX = -Math.sin(yaw.current);
       const fwdZ = -Math.cos(yaw.current);
       const rgtX = Math.cos(yaw.current);
@@ -571,16 +872,39 @@ function Player() {
       const moveX = fwdX * fz + rgtX * fx;
       const moveZ = fwdZ * fz + rgtZ * fx;
 
-      const toggleHide = edge('KeyC', prevC);
-      const placeWard = edge('KeyE', prevE);
+      const toggleHide = edge(kb.hide, prevC);
+      const placeWard = edge(kb.ward, prevE);
+      const sneaking =
+        k.has(kb.sneak) ||
+        ((kb.sneak === 'ShiftLeft' || kb.sneak === 'ShiftRight') &&
+          (k.has('ShiftLeft') || k.has('ShiftRight')));
 
       const result = advance(st, dt, {
         dirX: moveX,
         dirY: moveZ,
-        sneaking: k.has('ShiftLeft') || k.has('ShiftRight'),
+        sneaking,
         toggleHide,
         placeWard,
       });
+
+      // ---- The trees that fold the road: step into one and you're elsewhere ----
+      if (portalCD.current > 0) {
+        portalCD.current -= dt;
+      } else {
+        for (const pt of PORTAL_TREES) {
+          if (Math.hypot(result.player.x - pt.x, result.player.y - pt.y) < PORTAL_RADIUS) {
+            const dest = randomTeleportTarget(result.player.x, result.player.y);
+            result.player.x = dest.x;
+            result.player.y = dest.y;
+            result.fear = Math.min(100, (result.fear || 0) + 7);
+            portalCD.current = 3.0;
+            if (!st.settings.reduceMotion) shake.current = Math.min(0.6, shake.current + 0.45);
+            stinger();
+            if (st.settings.subtitles) api.showToast('[ the trees fold the road \u2014 you are elsewhere ]');
+            break;
+          }
+        }
+      }
 
       // ---- Battery drain ----
       let battery = st.battery;
@@ -595,12 +919,43 @@ function Player() {
       const moving = moveX !== 0 || moveZ !== 0;
       bob.current += moving ? dt * 9 : 0;
 
+      // ---- Jump / vertical hop (cosmetic; 2D collision is unchanged) ----
+      const wantJump = k.has('Space');
+      if (wantJump && !prevSpace.current && grounded.current && !result.hidden) {
+        vy.current = JUMP_V;
+        grounded.current = false;
+      }
+      prevSpace.current = wantJump;
+      py.current += vy.current * dt;
+      vy.current -= GRAVITY * dt;
+      if (py.current <= 0) {
+        py.current = 0;
+        vy.current = 0;
+        grounded.current = true;
+      }
+
+      // ---- Feed the third-person avatar ----
+      deadT.current = 0;
+      avatar.x = result.player.x;
+      avatar.z = result.player.y;
+      avatar.yaw = yaw.current;
+      avatar.yOff = py.current;
+      avatar.vy = vy.current;
+      avatar.grounded = grounded.current;
+      avatar.hidden = result.hidden;
+      avatar.speed = moving ? (sneaking ? 0.5 : 1) : 0;
+      avatar.running = moving && !sneaking;
+      avatar.phase = bob.current;
+      avatar.mode = st.settings.cameraMode;
+      avatar.status = 'playing';
+      avatar.dead = 0;
+
       // ---- Audio: footsteps, tension, chase stinger ----
       if (moving && !result.hidden) {
         const stepIdx = Math.floor(bob.current / Math.PI);
         if (stepIdx !== lastStep.current) {
           lastStep.current = stepIdx;
-          footstep(k.has('ShiftLeft') || k.has('ShiftRight') ? 0.4 : 1);
+          footstep(sneaking ? 0.4 : 1);
         }
       }
       // Danger drives heartbeat + drone.
@@ -628,39 +983,260 @@ function Player() {
     } else {
       if (lanternOn !== st.lanternOn) useGameStore.setState({ lanternOn });
       // Keep edges in sync so actions don't fire on resume.
-      prevC.current = k.has('KeyC');
-      prevE.current = k.has('KeyE');
-      prevG.current = k.has('KeyG');
+      prevC.current = k.has(kb.hide);
+      prevE.current = k.has(kb.ward);
+      prevG.current = k.has(kb.interact);
+      prevSpace.current = k.has('Space');
+      prevV.current = k.has(kb.camera);
       updateTension(0); // calm the heartbeat while paused / between runs
+
+      // Keep the avatar settled; play a collapse if the run was lost.
+      const p2 = useGameStore.getState();
+      avatar.x = p2.player.x;
+      avatar.z = p2.player.y;
+      avatar.yaw = yaw.current;
+      avatar.speed = 0;
+      avatar.running = false;
+      avatar.hidden = p2.hidden;
+      avatar.mode = st.settings.cameraMode;
+      avatar.status = st.status;
+      py.current = 0;
+      vy.current = 0;
+      grounded.current = true;
+      avatar.yOff = 0;
+      avatar.vy = 0;
+      avatar.grounded = true;
+      if (st.status === 'lost') {
+        deadT.current = Math.min(1, deadT.current + dt * 2);
+      } else {
+        deadT.current = 0;
+      }
+      avatar.dead = deadT.current;
     }
 
-    // ---- Place the camera at the (possibly updated) player position ----
+    // ---- Place the camera (first- or third-person) ----
     const p = useGameStore.getState();
+    const mode = p.settings.cameraMode;
     const eye = p.hidden ? CROUCH_EYE : EYE;
     const reduce = p.settings.reduceMotion;
-    const bobY = !reduce && p.status === 'playing' && !paused ? Math.sin(bob.current) * 0.05 : 0;
+    const bobActive = !reduce && p.status === 'playing' && !paused;
     // Decay any active screen-shake and offset the camera by it.
     shake.current = Math.max(0, shake.current - dt * 1.6);
     const sh = shake.current;
     const ox = sh ? (Math.random() - 0.5) * sh : 0;
     const oy = sh ? (Math.random() - 0.5) * sh : 0;
-    camera.position.set(wx(p.player.x) + ox, eye + bobY + oy, wz(p.player.y) + ox);
+    const px = wx(p.player.x);
+    const pz = wz(p.player.y);
+
+    if (mode === 'tpp') {
+      // Orbit a little behind and above the avatar, over its shoulder.
+      const cosP = Math.cos(pitch.current);
+      const dirX = -Math.sin(yaw.current) * cosP;
+      const dirY = Math.sin(pitch.current);
+      const dirZ = -Math.cos(yaw.current) * cosP;
+      const dist = 4.0;
+      const targetY = eye + py.current + 0.1;
+      camera.position.set(
+        px - dirX * dist + ox,
+        Math.max(0.5, targetY - dirY * dist + 1.0 + oy),
+        pz - dirZ * dist + ox
+      );
+      camera.lookAt(px, targetY - 0.2, pz);
+    } else {
+      const bobY = bobActive ? Math.sin(bob.current) * 0.05 : 0;
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = yaw.current;
+      camera.rotation.x = pitch.current;
+      camera.position.set(px + ox, eye + py.current + bobY + oy, pz + ox);
+    }
   });
 
   return null;
 }
 
+// ---------- Third-person avatar with procedural skeletal animation ----------
+function PlayerAvatar() {
+  const root = useRef();
+  const hips = useRef();
+  const torso = useRef();
+  const armL = useRef();
+  const armR = useRef();
+  const legL = useRef();
+  const legR = useRef();
+
+  useFrame((_, rawDt) => {
+    const dt = Math.min(0.05, rawDt);
+    const a = avatar;
+    const g = root.current;
+    if (!g) return;
+    g.visible = a.mode === 'tpp' && (a.status === 'playing' || a.status === 'lost');
+    if (!g.visible) return;
+
+    g.position.set(wx(a.x), a.yOff, wz(a.z));
+    g.rotation.y = a.yaw + Math.PI;
+
+    const now = performance.now() * 0.001;
+    const airborne = !a.grounded && a.status === 'playing';
+    const moving = a.speed > 0.01 && !a.hidden && !airborne;
+
+    let lLeg = 0;
+    let rLeg = 0;
+    let lArm = 0;
+    let rArm = 0;
+    let hipsY = 0;
+    let torsoLean = 0;
+    let hipsRotX = 0;
+
+    if (a.dead > 0) {
+      // Collapse forward onto the ground.
+      hipsRotX = -a.dead * (Math.PI / 2);
+      hipsY = -a.dead * 0.6;
+    } else if (airborne) {
+      if (a.vy > 0.1) {
+        lLeg = -0.7; // jump: tuck legs, arms swing up
+        rLeg = -0.4;
+        lArm = -2.2;
+        rArm = -2.0;
+      } else {
+        lLeg = -0.3; // fall: splay legs, arms flail
+        rLeg = 0.35;
+        lArm = -2.6;
+        rArm = -2.4;
+      }
+    } else if (a.hidden) {
+      hipsY = -0.55; // crouch low
+      lLeg = 0.9;
+      rLeg = 0.9;
+      torsoLean = 0.5;
+      lArm = 0.4;
+      rArm = 0.4;
+    } else if (moving) {
+      const amp = a.running ? 0.95 : 0.5;
+      const sp = a.running ? 1.0 : 0.7;
+      const ph = a.phase * sp;
+      lLeg = Math.sin(ph) * amp;
+      rLeg = Math.sin(ph + Math.PI) * amp;
+      lArm = Math.sin(ph + Math.PI) * amp * 0.9;
+      rArm = Math.sin(ph) * amp * 0.9;
+      torsoLean = a.running ? 0.22 : 0.08;
+      hipsY = Math.abs(Math.sin(ph)) * (a.running ? 0.08 : 0.04);
+    } else {
+      const br = Math.sin(now * 1.4) * 0.04; // idle breathing
+      lArm = br;
+      rArm = -br;
+      torsoLean = 0.02 + br * 0.2;
+    }
+
+    const kf = 1 - Math.pow(0.0015, dt); // frame-rate independent smoothing
+    const lp = (ref, prop, target) => {
+      if (ref.current) ref.current.rotation[prop] += (target - ref.current.rotation[prop]) * kf;
+    };
+    lp(legL, 'x', lLeg);
+    lp(legR, 'x', rLeg);
+    lp(armL, 'x', lArm);
+    lp(armR, 'x', rArm);
+    lp(torso, 'x', torsoLean);
+    if (hips.current) {
+      hips.current.position.y += (hipsY - hips.current.position.y) * kf;
+      hips.current.rotation.x += (hipsRotX - hips.current.rotation.x) * kf;
+    }
+  });
+
+  const skin = '#c79c76';
+  const jacket = '#54606b';
+  const pants = '#2c2824';
+  const boot = '#15110d';
+  const hair = '#241a14';
+  return (
+    <group ref={root}>
+      <group ref={hips}>
+        {/* legs pivot at the hip: trousers + boot */}
+        <group ref={legL} position={[-0.12, 0.9, 0]}>
+          <mesh position={[0, -0.45, 0]} castShadow>
+            <capsuleGeometry args={[0.1, 0.7, 4, 8]} />
+            <meshStandardMaterial color={pants} roughness={1} />
+          </mesh>
+          <mesh position={[0, -0.86, 0.05]} castShadow>
+            <boxGeometry args={[0.17, 0.12, 0.28]} />
+            <meshStandardMaterial color={boot} roughness={1} />
+          </mesh>
+        </group>
+        <group ref={legR} position={[0.12, 0.9, 0]}>
+          <mesh position={[0, -0.45, 0]} castShadow>
+            <capsuleGeometry args={[0.1, 0.7, 4, 8]} />
+            <meshStandardMaterial color={pants} roughness={1} />
+          </mesh>
+          <mesh position={[0, -0.86, 0.05]} castShadow>
+            <boxGeometry args={[0.17, 0.12, 0.28]} />
+            <meshStandardMaterial color={boot} roughness={1} />
+          </mesh>
+        </group>
+        {/* torso pivots at the waist and carries head + arms */}
+        <group ref={torso} position={[0, 0.9, 0]}>
+          <mesh position={[0, 0.4, 0]} castShadow>
+            <capsuleGeometry args={[0.23, 0.6, 4, 12]} />
+            <meshStandardMaterial color={jacket} roughness={0.85} />
+          </mesh>
+          {/* collar */}
+          <mesh position={[0, 0.78, 0]} castShadow>
+            <cylinderGeometry args={[0.14, 0.18, 0.12, 12]} />
+            <meshStandardMaterial color={pants} roughness={1} />
+          </mesh>
+          <mesh position={[0, 1.0, 0]} castShadow>
+            <sphereGeometry args={[0.2, 16, 16]} />
+            <meshStandardMaterial color={skin} roughness={0.85} />
+          </mesh>
+          {/* hair cap */}
+          <mesh position={[0, 1.1, -0.02]} castShadow>
+            <sphereGeometry args={[0.21, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.62]} />
+            <meshStandardMaterial color={hair} roughness={1} />
+          </mesh>
+          <group ref={armL} position={[-0.3, 0.75, 0]}>
+            <mesh position={[0, -0.35, 0]} castShadow>
+              <capsuleGeometry args={[0.08, 0.6, 4, 8]} />
+              <meshStandardMaterial color={jacket} roughness={0.9} />
+            </mesh>
+            <mesh position={[0, -0.7, 0]} castShadow>
+              <sphereGeometry args={[0.08, 8, 8]} />
+              <meshStandardMaterial color={skin} roughness={0.9} />
+            </mesh>
+          </group>
+          <group ref={armR} position={[0.3, 0.75, 0]}>
+            <mesh position={[0, -0.35, 0]} castShadow>
+              <capsuleGeometry args={[0.08, 0.6, 4, 8]} />
+              <meshStandardMaterial color={jacket} roughness={0.9} />
+            </mesh>
+            <mesh position={[0, -0.7, 0]} castShadow>
+              <sphereGeometry args={[0.08, 8, 8]} />
+              <meshStandardMaterial color={skin} roughness={0.9} />
+            </mesh>
+          </group>
+        </group>
+      </group>
+    </group>
+  );
+}
+
 export default function FirstPerson() {
+  const quality = useGameStore((s) => s.settings.quality);
   const start = useMemo(() => {
     const { player } = useGameStore.getState();
     return [wx(player.x), EYE, wz(player.y)];
   }, []);
 
+  // Lower quality => lower render resolution => big perf win on weak machines.
+  const dpr = { low: 1, medium: 1.5, high: 2 }[quality] || 2;
+
   return (
     <Canvas
-      shadows
-      camera={{ fov: 75, near: 0.05, far: 120, position: start }}
-      gl={{ antialias: true }}
+      shadows={quality === 'high' ? 'soft' : false}
+      dpr={[1, dpr]}
+      camera={{ fov: 75, near: 0.05, far: 160, position: start }}
+      gl={{
+        antialias: quality !== 'low',
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 1.15,
+      }}
       style={{ position: 'absolute', inset: 0 }}
       onCreated={({ gl, scene }) => {
         gl.setClearColor('#05040a');
@@ -672,8 +1248,11 @@ export default function FirstPerson() {
       <Ground />
       <BuildingFloors />
       <Walls />
+      <Roofs />
+      <DecorTown />
       <HideSpots />
       <Forest />
+      <PortalTrees />
       <Survivors />
       <LorePickups />
       <MaterialPickups />
@@ -681,6 +1260,7 @@ export default function FirstPerson() {
       <Enemies />
       <Wards />
       <Player />
+      <PlayerAvatar />
     </Canvas>
   );
 }

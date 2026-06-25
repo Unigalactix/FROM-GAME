@@ -7,6 +7,8 @@ import {
   FastForward,
   RotateCcw,
   LogOut,
+  Heart,
+  Eye,
 } from 'lucide-react';
 
 // Central icon registry so scenes reference icons by a stable name.
@@ -19,6 +21,8 @@ const icons = {
   'fast-forward': FastForward,
   reset: RotateCcw,
   exit: LogOut,
+  heart: Heart,
+  eye: Eye,
 };
 
 export default function Icon({ name, size = 20, strokeWidth = 1.5, className = '' }) {

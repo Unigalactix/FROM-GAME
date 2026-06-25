@@ -1,18 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { useGameStore } from '../store.js';
+import { useGameStore, keyLabel } from '../store.js';
 import FirstPerson from './FirstPerson.jsx';
 import HUD from './HUD.jsx';
 import Panels from './Panels.jsx';
+import Settings from '../components/Settings.jsx';
 import { initAudio, startAmbient, setMasterVolume } from '../systems/audio.js';
 
 export default function Game() {
   const status = useGameStore((s) => s.status);
   const fear = useGameStore((s) => s.fear);
   const day = useGameStore((s) => s.day);
+  const paused = useGameStore((s) => s.paused);
   const startGame = useGameStore((s) => s.startGame);
   const nextDay = useGameStore((s) => s.nextDay);
   const exitToMenu = useGameStore((s) => s.exitToMenu);
+  const togglePause = useGameStore((s) => s.togglePause);
+  const setPaused = useGameStore((s) => s.setPaused);
   const settings = useGameStore((s) => s.settings);
+  const keybinds = useGameStore((s) => s.keybinds);
 
   // Any open panel pauses the world and frees the mouse.
   const panelOpen = useGameStore(
@@ -29,16 +34,25 @@ export default function Game() {
     return () => document.removeEventListener('pointerlockchange', onChange);
   }, []);
 
+  // Esc toggles the pause menu (only when no story panel is taking Esc).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.code === 'Escape' && !panelOpen && status === 'playing') togglePause();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [panelOpen, status, togglePause]);
+
   // Keep the audio master in sync with the volume setting.
   useEffect(() => {
     setMasterVolume(settings.masterVolume);
   }, [settings.masterVolume]);
 
-  // Release the mouse when the run ends or a panel opens.
+  // Release the mouse when the run ends, a panel opens, or the game is paused.
   useEffect(() => {
-    if ((status !== 'playing' || panelOpen) && document.pointerLockElement)
+    if ((status !== 'playing' || panelOpen || paused) && document.pointerLockElement)
       document.exitPointerLock();
-  }, [status, panelOpen]);
+  }, [status, panelOpen, paused]);
 
   const requestLock = () => {
     // First gesture also unlocks the browser's audio context.
@@ -80,16 +94,31 @@ export default function Game() {
       <Panels />
 
       {/* Click-to-look overlay (pointer lock). */}
-      {!locked && status === 'playing' && !panelOpen && (
+      {!locked && status === 'playing' && !panelOpen && !paused && (
         <button
           onClick={requestLock}
-          className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm cursor-pointer"
+          className="ui-fade-in absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm cursor-pointer"
         >
           <p className="font-type text-3xl tracking-[0.3em] text-stone-300 mb-3">CLICK TO LOOK</p>
           <p className="font-mono text-[10px] tracking-[0.4em] text-stone-500 uppercase">
-            WASD move · Mouse look · G interact · J journal · K craft · B eat · F lantern
+            {`${keyLabel(keybinds.forward)}${keyLabel(keybinds.left)}${keyLabel(keybinds.back)}${keyLabel(keybinds.right)} move \u00b7 Mouse look \u00b7 Space jump \u00b7 ${keyLabel(keybinds.interact)} interact \u00b7 ${keyLabel(keybinds.camera)} view \u00b7 ${keyLabel(keybinds.journal)} journal \u00b7 ${keyLabel(keybinds.craft)} craft`}
+          </p>
+          <p className="font-mono text-[9px] tracking-[0.4em] text-stone-700 uppercase mt-2">
+            ESC to pause
           </p>
         </button>
+      )}
+
+      {/* Pause menu. */}
+      {paused && status === 'playing' && (
+        <PauseMenu
+          onResume={() => setPaused(false)}
+          onRestart={() => {
+            startGame();
+            setPaused(false);
+          }}
+          onMenu={exitToMenu}
+        />
       )}
 
       {status !== 'playing' && (
@@ -99,10 +128,46 @@ export default function Game() {
   );
 }
 
+function PauseMenu({ onResume, onRestart, onMenu }) {
+  const [showSettings, setShowSettings] = useState(false);
+  return (
+    <div className="ui-fade-in absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm">
+      <h2 className="font-type text-4xl md:text-5xl tracking-[0.3em] text-stone-200 mb-1">PAUSED</h2>
+      <p className="font-mono text-[10px] tracking-[0.5em] text-stone-600 uppercase mb-10">
+        The town waits.
+      </p>
+
+      <div className="flex flex-col items-center gap-5">
+        <button onClick={onResume} className="glitch-target font-mono text-lg tracking-[0.3em] text-stone-300">
+          RESUME
+        </button>
+        <button
+          onClick={() => setShowSettings((s) => !s)}
+          className="glitch-target font-mono text-sm tracking-[0.3em] text-stone-400"
+        >
+          {showSettings ? 'HIDE SETTINGS' : 'SETTINGS'}
+        </button>
+        <button onClick={onRestart} className="glitch-target font-mono text-sm tracking-[0.3em] text-stone-500">
+          RESTART DAY
+        </button>
+        <button onClick={onMenu} className="glitch-target font-mono text-sm tracking-[0.3em] text-stone-500">
+          MAIN MENU
+        </button>
+      </div>
+
+      {showSettings && (
+        <div className="mt-2 max-h-[55vh] overflow-y-auto">
+          <Settings />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EndScreen({ status, day, onNextDay, onRetry, onMenu }) {
   const won = status === 'won';
   return (
-    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm flicker">
+    <div className="ui-fade-in absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm flicker">
       <p className="font-mono text-[10px] tracking-[0.5em] text-stone-600 uppercase mb-4">
         {won ? `Day ${day} survived` : 'The night was longer than you'}
       </p>

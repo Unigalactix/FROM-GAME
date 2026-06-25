@@ -3,9 +3,50 @@
 // world coordinates as town.js, so they drop straight into both the 2D map and
 // the 3D first-person view.
 
-import { BUILDINGS } from './town.js';
+import { BUILDINGS, WORLD, DECOR_HOUSES } from './town.js';
 
 const byName = (name) => BUILDINGS.find((b) => b.name === name);
+
+// ---------- The trees that fold the road ----------
+// Standing inside one of these gnarled, sigil-lit trees drops you somewhere
+// else in town entirely — the town's signature impossibility. Positions sit in
+// open ground (streets / squares) so you actually walk into them.
+export const PORTAL_TREES = [
+  { id: 'pt1', x: 430, y: 300 },
+  { id: 'pt2', x: 470, y: 640 },
+  { id: 'pt3', x: 900, y: 320 },
+  { id: 'pt4', x: 700, y: 560 },
+  { id: 'pt5', x: 1130, y: 560 },
+  { id: 'pt6', x: 360, y: 560 },
+  { id: 'pt7', x: 1350, y: 360 },
+  { id: 'pt8', x: 760, y: 980 },
+  { id: 'pt9', x: 1430, y: 700 },
+  { id: 'pt10', x: 1140, y: 1080 },
+];
+
+export const PORTAL_RADIUS = 18; // world units — how close you must step to trigger
+
+// True if the point sits inside (or hugging) a solid decorative house.
+function insideDecor(x, y, margin = 16) {
+  return DECOR_HOUSES.some(
+    (h) => x > h.x - margin && x < h.x + h.w + margin && y > h.y - margin && y < h.y + h.h + margin
+  );
+}
+
+// Pick a random open spot elsewhere in town to be flung to. Always lands a
+// meaningful distance from where you left so the jump is felt.
+export function randomTeleportTarget(fromX, fromY) {
+  for (let i = 0; i < 40; i++) {
+    const x = 80 + Math.random() * (WORLD.w - 160);
+    const y = 80 + Math.random() * (WORLD.h - 160);
+    if (insideDecor(x, y)) continue;
+    if (Math.hypot(x - fromX, y - fromY) < 320) continue;
+    // Avoid dropping straight onto another portal (instant re-trigger).
+    if (PORTAL_TREES.some((p) => Math.hypot(x - p.x, y - p.y) < 40)) continue;
+    return { x, y };
+  }
+  return { x: WORLD.w * 0.5, y: WORLD.h * 0.5 };
+}
 
 // ---------- Survivors (NPCs) ----------
 // Each lives somewhere in town and offers a small quest. `quest.check` reads the

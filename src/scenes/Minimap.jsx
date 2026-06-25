@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { useGameStore, getPhaseInfo } from '../store.js';
 import { WORLD, BUILDINGS, WALLS } from '../systems/town.js';
-import { TASKS } from '../systems/world.js';
+import { TASKS, PORTAL_TREES } from '../systems/world.js';
 
 const SIZE = 150; // px
 
@@ -34,6 +34,15 @@ export default function Minimap() {
       // Walls
       ctx.fillStyle = '#3b3833';
       for (const w of WALLS) ctx.fillRect(w.x * sx, w.y * sy, Math.max(1, w.w * sx), Math.max(1, w.h * sy));
+
+      // Portal trees — the spots that fold the road. Faint, pulsing teal.
+      const pulse = 0.4 + Math.sin(performance.now() * 0.004) * 0.3;
+      for (const pt of PORTAL_TREES) {
+        ctx.fillStyle = `rgba(63,176,164,${pulse.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(pt.x * sx, pt.y * sy, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // Wards
       for (const w of st.wards) {

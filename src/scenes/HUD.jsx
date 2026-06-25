@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useGameStore, getPhaseInfo } from '../store.js';
+import { useEffect, useRef, useState } from 'react';
+import { useGameStore, getPhaseInfo, keyLabel } from '../store.js';
 import Icon from '../components/Icon.jsx';
 import Minimap from './Minimap.jsx';
 
@@ -28,7 +28,8 @@ export default function HUD() {
   const day = useGameStore((s) => s.day);
   const bandages = useGameStore((s) => s.bandages);
   const food = useGameStore((s) => s.food);
-  const toast = useGameStore((s) => s.toast);
+  const toasts = useGameStore((s) => s.toasts);
+  const keybinds = useGameStore((s) => s.keybinds);
 
   const fastForward = useGameStore((s) => s.fastForward);
   const startGame = useGameStore((s) => s.startGame);
@@ -46,16 +47,17 @@ export default function HUD() {
     return () => clearInterval(t);
   }, [drainStamina]);
 
-  // Space = hold breath.
+  // Hold breath (bound key).
   useEffect(() => {
+    const breathCode = keybinds.breath;
     const down = (e) => {
-      if (e.code === 'Space') {
+      if (e.code === breathCode) {
         e.preventDefault();
         setHolding(true);
       }
     };
     const up = (e) => {
-      if (e.code === 'Space') setHolding(false);
+      if (e.code === breathCode) setHolding(false);
     };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
@@ -63,12 +65,93 @@ export default function HUD() {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
     };
-  }, [setHolding]);
+  }, [setHolding, keybinds.breath]);
 
   const ss = String(Math.ceil(phaseTimeLeft)).padStart(2, '0');
+  const targeting = !!(promptInteract || promptHide || promptDoor) && !hidden;
+
+  // Auto-hide non-critical HUD after a few seconds of no input.
+  const [idle, setIdle] = useState(false);
+  useEffect(() => {
+    let t;
+    const wake = () => {
+      setIdle(false);
+      clearTimeout(t);
+      t = setTimeout(() => setIdle(true), 5000);
+    };
+    wake();
+    window.addEventListener('mousemove', wake);
+    window.addEventListener('keydown', wake);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('mousemove', wake);
+      window.removeEventListener('keydown', wake);
+    };
+  }, []);
+
+  // Brief colour wash whenever the day phase changes.
+  const [wash, setWash] = useState(null);
+  const prevPhase = useRef(phase);
+  useEffect(() => {
+    if (prevPhase.current === phase) return;
+    prevPhase.current = phase;
+    const bg = {
+      DAY: 'radial-gradient(ellipse at center, rgba(230,235,240,0.18), rgba(230,235,240,0) 70%)',
+      DUSK: 'radial-gradient(ellipse at center, rgba(176,106,44,0.34), rgba(120,60,20,0) 72%)',
+      NIGHT: 'radial-gradient(ellipse at center, rgba(126,20,20,0.42), rgba(40,2,2,0.2) 75%)',
+      DAWN: 'radial-gradient(ellipse at center, rgba(214,176,106,0.3), rgba(214,176,106,0) 72%)',
+    }[phase];
+    setWash({ bg, key: Date.now() });
+  }, [phase]);
+
+  // Red vignette pulse when Condition drops (taking damage).
+  const [hit, setHit] = useState(0);
+  const prevHealth = useRef(health);
+  useEffect(() => {
+    if (health < prevHealth.current - 0.4) setHit(Date.now());
+    prevHealth.current = health;
+  }, [health]);
+
+  const dimIdle = `transition-opacity duration-700 ${idle ? 'opacity-25' : 'opacity-100'}`;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 select-none">
+      {/* ---------- PHASE-CHANGE COLOUR WASH ---------- */}
+      {wash && (
+        <div
+          key={wash.key}
+          className="phase-wash absolute inset-0 z-10"
+          style={{ background: wash.bg }}
+          onAnimationEnd={() => setWash(null)}
+        />
+      )}
+      {/* ---------- DAMAGE FLASH ---------- */}
+      {hit > 0 && (
+        <div
+          key={hit}
+          className="damage-flash absolute inset-0 z-10"
+          style={{
+            background:
+              'radial-gradient(ellipse at center, rgba(0,0,0,0) 35%, rgba(126,20,20,0.55) 100%)',
+          }}
+          onAnimationEnd={() => setHit(0)}
+        />
+      )}
+      {/* ---------- INTERACTION RETICLE ---------- */}
+      {!hidden && (
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+          <div
+            className={`rounded-full border transition-all duration-200 ${
+              targeting ? 'reticle-pulse border-amber-rust' : 'border-stone-500/40'
+            }`}
+            style={{
+              width: targeting ? 14 : 6,
+              height: targeting ? 14 : 6,
+              boxShadow: targeting ? '0 0 6px rgba(176,106,44,0.6)' : 'none',
+            }}
+          />
+        </div>
+      )}
       {/* ---------- TOP CENTER: phase clock + meters ---------- */}
       <div className="absolute top-5 left-1/2 -translate-x-1/2 flex flex-col items-center">
         <div className="flex items-center gap-2 mb-1">
@@ -81,8 +164,8 @@ export default function HUD() {
         <div className="font-mono text-xs tracking-[0.3em] text-stone-500 mt-1">0:{ss}</div>
         <div className="font-mono text-[9px] tracking-[0.5em] text-stone-600 mt-1">DAY {day}</div>
 
-        <Meter label="Condition" value={health} className="mt-3" tone="health" />
-        <Meter label="Fear" value={fear} className="mt-2" tone="fear" />
+        <Meter label="Condition" value={health} className="mt-3" tone="health" icon="heart" />
+        <Meter label="Fear" value={fear} className="mt-2" tone="fear" icon="eye" />
       </div>
 
       {/* ---------- EXPOSED-AT-NIGHT WARNING ---------- */}
@@ -117,27 +200,34 @@ export default function HUD() {
       {/* ---------- CENTER: interaction prompts ---------- */}
       <div className="absolute left-1/2 top-[60%] -translate-x-1/2 flex flex-col items-center gap-2">
         {hidden ? (
-          <Prompt keyLabel="C" text="Stop Hiding" active />
+          <Prompt keyLabel={keyLabel(keybinds.hide)} text="Stop Hiding" active />
         ) : (
           <>
-            {promptInteract && <Prompt keyLabel="G" text={promptInteract} active />}
-            {promptHide && <Prompt keyLabel="C" text="Hide Here" active />}
-            {promptDoor && <Prompt keyLabel="E" text={`Hang Talisman \u00b7 ${promptDoor}`} active />}
+            {promptInteract && <Prompt keyLabel={keyLabel(keybinds.interact)} text={promptInteract} active />}
+            {promptHide && <Prompt keyLabel={keyLabel(keybinds.hide)} text="Hide Here" active />}
+            {promptDoor && (
+              <Prompt keyLabel={keyLabel(keybinds.ward)} text={`Hang Talisman \u00b7 ${promptDoor}`} active />
+            )}
           </>
         )}
       </div>
 
-      {/* ---------- TOAST (transient pickups / events) ---------- */}
-      {toast && (
-        <div className="absolute left-1/2 top-[72%] -translate-x-1/2">
-          <p className="font-mono text-[11px] tracking-[0.3em] text-amber-rust/90 prompt-active">
-            {toast.text}
-          </p>
+      {/* ---------- TOAST QUEUE (transient pickups / events) ---------- */}
+      {toasts.length > 0 && (
+        <div className="absolute left-1/2 top-[72%] -translate-x-1/2 flex flex-col items-center gap-1">
+          {toasts.map((tt) => (
+            <p
+              key={tt.id}
+              className="toast-in font-mono text-[11px] tracking-[0.3em] text-amber-rust/90"
+            >
+              {tt.text}
+            </p>
+          ))}
         </div>
       )}
 
       {/* ---------- BOTTOM CENTER: stamina (Hold Breath) ---------- */}
-      <div className="absolute bottom-9 left-1/2 -translate-x-1/2 w-64">
+      <div className={`absolute bottom-9 left-1/2 -translate-x-1/2 w-64 ${dimIdle}`}>
         <div className="flex items-center justify-between mb-1">
           <span className="font-mono text-[9px] tracking-[0.3em] text-stone-500 uppercase">
             {holding ? 'Holding Breath' : 'Breath'}
@@ -154,12 +244,12 @@ export default function HUD() {
           />
         </div>
         <p className="font-mono text-[8px] tracking-widest text-stone-700 mt-1 text-center">
-          WASD MOVE · MOUSE LOOK · G INTERACT · C HIDE · E WARD · J JOURNAL · K CRAFT · H BANDAGE · B EAT · F LANTERN
+          {`${keyLabel(keybinds.forward)}${keyLabel(keybinds.left)}${keyLabel(keybinds.back)}${keyLabel(keybinds.right)} MOVE \u00b7 MOUSE LOOK \u00b7 SPACE JUMP \u00b7 ${keyLabel(keybinds.interact)} INTERACT \u00b7 ${keyLabel(keybinds.hide)} HIDE \u00b7 ${keyLabel(keybinds.ward)} WARD \u00b7 ${keyLabel(keybinds.camera)} VIEW \u00b7 ${keyLabel(keybinds.journal)} JOURNAL \u00b7 ${keyLabel(keybinds.craft)} CRAFT \u00b7 ESC PAUSE`}
         </p>
       </div>
 
       {/* ---------- BOTTOM LEFT: lantern battery ---------- */}
-      <div className="absolute bottom-9 left-9 w-40">
+      <div className={`absolute bottom-9 left-9 w-40 ${dimIdle}`}>
         <div className="flex items-center justify-between mb-1">
           <span className="font-mono text-[9px] tracking-[0.3em] text-stone-500 uppercase">
             {lanternOn ? 'Lantern On' : 'Lantern Off'}
@@ -228,31 +318,33 @@ export default function HUD() {
       </div>
 
       {/* ---------- DEV / MOCK CONTROLS ---------- */}
-      <div className="pointer-events-auto absolute top-5 left-5 flex flex-col gap-2">
-        <button
-          onClick={() => fastForward(10)}
-          className="glitch-target font-mono text-[10px] tracking-widest text-stone-500 border border-stone-800 px-3 py-1 hover:border-blood"
-        >
-          ⏩ FAST-FORWARD TIME
-        </button>
-        <button
-          onClick={startGame}
-          className="glitch-target font-mono text-[10px] tracking-widest text-stone-500 border border-stone-800 px-3 py-1 hover:border-amber-rust"
-        >
-          ↺ RESTART DAY
-        </button>
-        <button
-          onClick={exitToMenu}
-          className="glitch-target font-mono text-[10px] tracking-widest text-stone-500 border border-stone-800 px-3 py-1 hover:border-stone-400"
-        >
-          ⏏ MAIN MENU
-        </button>
-      </div>
+      {import.meta.env.DEV && (
+        <div className="pointer-events-auto absolute top-5 left-5 flex flex-col gap-2">
+          <button
+            onClick={() => fastForward(10)}
+            className="glitch-target font-mono text-[10px] tracking-widest text-stone-500 border border-stone-800 px-3 py-1 hover:border-blood"
+          >
+            ⏩ FAST-FORWARD TIME
+          </button>
+          <button
+            onClick={startGame}
+            className="glitch-target font-mono text-[10px] tracking-widest text-stone-500 border border-stone-800 px-3 py-1 hover:border-amber-rust"
+          >
+            ↺ RESTART DAY
+          </button>
+          <button
+            onClick={exitToMenu}
+            className="glitch-target font-mono text-[10px] tracking-widest text-stone-500 border border-stone-800 px-3 py-1 hover:border-stone-400"
+          >
+            ⏏ MAIN MENU
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function Meter({ label, value, tone, className = '' }) {
+function Meter({ label, value, tone, icon, className = '' }) {
   const color =
     tone === 'fear'
       ? value > 70
@@ -268,7 +360,8 @@ function Meter({ label, value, tone, className = '' }) {
   return (
     <div className={`w-52 ${className}`}>
       <div className="flex items-center justify-between mb-1">
-        <span className="font-mono text-[9px] tracking-[0.3em] text-stone-500 uppercase">
+        <span className="flex items-center gap-1.5 font-mono text-[9px] tracking-[0.3em] text-stone-500 uppercase">
+          {icon && <Icon name={icon} size={11} className="text-stone-500" />}
           {label}
         </span>
         <span className="font-mono text-[9px] text-stone-500">{Math.ceil(value)}</span>

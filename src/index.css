@@ -222,3 +222,98 @@ body {
     transform: translate(3%, 1%);
   }
 }
+
+/* ---------- UI/UX polish (Phase 6.1) ---------- */
+
+/* Soft fade-in for overlays, menus and panels. */
+.ui-fade-in {
+  animation: uiFadeIn 0.2s ease-out both;
+}
+@keyframes uiFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Toast entry: rise + fade in, then hold. */
+.toast-in {
+  animation: toastIn 0.22s ease-out both;
+}
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Phase-change colour wash across the screen. */
+.phase-wash {
+  animation: phaseWash 1.3s ease-out forwards;
+}
+@keyframes phaseWash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Damage flash — quick red vignette pulse on taking a hit. */
+.damage-flash {
+  animation: damageFlash 0.5s ease-out forwards;
+}
+@keyframes damageFlash {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Interaction reticle pulse when something is targetable. */
+.reticle-pulse {
+  animation: reticlePulse 1.4s ease-in-out infinite;
+}
+@keyframes reticlePulse {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Keyboard / controller focus rings for accessibility. */
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible {
+  outline: 1px solid #b06a2c;
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-fade-in,
+  .toast-in,
+  .phase-wash,
+  .damage-flash,
+  .reticle-pulse {
+    animation: none;
+  }
+}

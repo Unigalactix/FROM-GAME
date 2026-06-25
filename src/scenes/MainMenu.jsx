@@ -4,6 +4,8 @@ import Settings from '../components/Settings.jsx';
 
 export default function MainMenu() {
   const enterTown = useGameStore((s) => s.enterTown);
+  const cameraMode = useGameStore((s) => s.settings.cameraMode);
+  const setSetting = useGameStore((s) => s.setSetting);
   const [showSettings, setShowSettings] = useState(false);
 
   const items = [
@@ -55,6 +57,27 @@ export default function MainMenu() {
             </button>
           ))}
         </nav>
+
+        {/* Quick perspective switch before entering. */}
+        <div className="mt-10 flex items-center gap-2">
+          <span className="font-mono text-[9px] tracking-[0.4em] text-stone-600 uppercase">View</span>
+          {[
+            ['fpp', '1ST PERSON'],
+            ['tpp', '3RD PERSON'],
+          ].map(([m, label]) => (
+            <button
+              key={m}
+              onClick={() => setSetting('cameraMode', m)}
+              className={`font-mono px-2 py-0.5 border text-[9px] uppercase tracking-widest transition-colors ${
+                cameraMode === m
+                  ? 'border-amber-rust/60 text-amber-rust'
+                  : 'border-stone-800 text-stone-600 hover:text-stone-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {showSettings && <Settings />}
       </div>
