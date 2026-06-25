@@ -13,27 +13,27 @@
 
 ---
 
-## Phase 0 — Foundation & Project Setup
+## Phase 0 — Foundation & Project Setup ✅ DONE
 **Goal:** Move from a single CDN file to a real, maintainable project.
 
-- [ ] Convert to a Vite + React project (`npm create vite@latest`).
-- [ ] Split current mockup into components: `MainMenu`, `HUD`, `Settings`, shared `Icon`.
-- [ ] Add a state store (Zustand or React Context) for global game state.
-- [ ] Set up folder structure: `/src/scenes`, `/src/systems`, `/src/components`, `/src/assets`.
-- [ ] Keep the GitHub Pages deploy working (Vite `base` config + `gh-pages`).
+- [x] Convert to a Vite + React project (`npm create vite@latest`).
+- [x] Split current mockup into components: `MainMenu`, `HUD`, `Settings`, shared `Icon`.
+- [x] Add a state store (Zustand or React Context) for global game state.
+- [x] Set up folder structure: `/src/scenes`, `/src/systems`, `/src/components`, `/src/assets`.
+- [x] Keep the GitHub Pages deploy working (Vite `base` config + `gh-pages`).
 
 **Deliverable:** Same UI as today, but modular and build-based.
 
 ---
 
-## Phase 1 — Core Game Loop (2D Top-Down Prototype)
+## Phase 1 — Core Game Loop (2D Top-Down Prototype) ✅ DONE
 **Goal:** Make it *playable* before making it pretty. Prove the loop in 2D.
 
-- [ ] Render a top-down map of the town (grid or simple tilemap).
-- [ ] Player movement (`WASD` / arrow keys) with collision against buildings.
-- [ ] Day/Night clock drives a global `phase` state: `DAY → DUSK → NIGHT → DAWN`.
-- [ ] At NIGHT, the player must be inside a building or they take damage.
-- [ ] Win condition: survive until DAWN. Lose condition: caught outside / health = 0.
+- [x] Render a top-down map of the town (grid or simple tilemap).
+- [x] Player movement (`WASD` / arrow keys) with collision against buildings.
+- [x] Day/Night clock drives a global `phase` state: `DAY → DUSK → NIGHT → DAWN`.
+- [x] At NIGHT, the player must be inside a building or they take damage.
+- [x] Win condition: survive until DAWN. Lose condition: caught outside / health = 0.
 
 **Deliverable:** A loop you can win or lose. Ugly but real.
 
