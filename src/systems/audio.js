@@ -181,6 +181,39 @@ export function stinger() {
   src.stop(t + 0.5);
 }
 
+// A wooden knock — the Smiling Folk rapping on a door at night. `vol` scales
+// with how close the knocker is to the player.
+export function knock(vol = 1) {
+  if (!ctx || !started) return;
+  const t = ctx.currentTime;
+  // Sharp attack of filtered noise = knuckles on wood.
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer;
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 240;
+  bp.Q.value = 3.5;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.16 * vol, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  src.connect(bp).connect(g).connect(master);
+  src.start(t);
+  src.stop(t + 0.14);
+  // Low resonant body of the door panel.
+  const o = ctx.createOscillator();
+  const og = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(150, t);
+  o.frequency.exponentialRampToValueAtTime(66, t + 0.1);
+  og.gain.setValueAtTime(0.0001, t);
+  og.gain.exponentialRampToValueAtTime(0.1 * vol, t + 0.006);
+  og.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+  o.connect(og).connect(master);
+  o.start(t);
+  o.stop(t + 0.16);
+}
+
 // A soft UI tick (pickups, menu).
 export function uiClick() {
   if (!ctx || !started) return;

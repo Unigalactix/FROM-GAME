@@ -5,7 +5,7 @@
 > request. **Keep it updated whenever new structural info, conventions, or key
 > decisions are added.** Update the "Last updated" line below when you change it.
 
-**Last updated:** 2026-06-26
+**Last updated:** 2026-07-01
 
 ---
 
@@ -77,6 +77,9 @@ src/
     Game.jsx           # Mounts the active scene
     MainMenu.jsx       # Title screen (incl. FPP/TPP toggle)
     FirstPerson.jsx    # The 3D Canvas: world geometry, props, player controller
+                       #   - Facades(): instanced doors + windows (glass glows
+                       #     warm at night via dayLight); Enemies() renders the
+                       #     "Smiling Folk" (grin, head-tilt, door-knock arm).
     HUD.jsx            # Overlay: reticle, meters, toasts, minimap, camera toggle
     Minimap.jsx        # Top-down minimap (buildings, portals, tasks, enemies)
     TownMap.jsx        # Full map view
@@ -86,6 +89,10 @@ src/
     world.js           # NPCS, LORE, MATERIAL_NODES, TASKS, PORTAL_TREES, RECIPES
     sim.js             # advance() — the core per-frame simulation
     enemies.js         # Enemy spawning/behaviour (ENEMY_R = 9)
+                       #   "Smiling Folk": wander -> drift to a random door ->
+                       #   'knock' (rooted, rap on it, grin) -> chase on detect.
+                       #   Wards repel them, so a warded door turns them away.
+                       #   Enemy fields: state, goalDoor, knockT, knockBeat, smile.
     textures.js        # Procedural ground/wall/floor textures
     audio.js           # Sound/stingers
   components/

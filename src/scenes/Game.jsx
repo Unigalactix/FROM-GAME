@@ -101,7 +101,7 @@ export default function Game() {
         >
           <p className="font-type text-3xl tracking-[0.3em] text-stone-300 mb-3">CLICK TO LOOK</p>
           <p className="font-mono text-[10px] tracking-[0.4em] text-stone-500 uppercase">
-            {`${keyLabel(keybinds.forward)}${keyLabel(keybinds.left)}${keyLabel(keybinds.back)}${keyLabel(keybinds.right)} move \u00b7 Mouse look \u00b7 Space jump \u00b7 ${keyLabel(keybinds.interact)} interact \u00b7 ${keyLabel(keybinds.camera)} view \u00b7 ${keyLabel(keybinds.journal)} journal \u00b7 ${keyLabel(keybinds.craft)} craft`}
+            {`${keyLabel(keybinds.forward)}${keyLabel(keybinds.left)}${keyLabel(keybinds.back)}${keyLabel(keybinds.right)} move \u00b7 Mouse look \u00b7 Space jump \u00b7 ${keyLabel(keybinds.interact)} interact \u00b7 ${keyLabel(keybinds.hide)} hide \u00b7 ${keyLabel(keybinds.ward)} ward \u00b7 ${keyLabel(keybinds.camera)} view \u00b7 ${keyLabel(keybinds.journal)} journal \u00b7 ${keyLabel(keybinds.craft)} craft`}
           </p>
           <p className="font-mono text-[9px] tracking-[0.4em] text-stone-700 uppercase mt-2">
             ESC to pause

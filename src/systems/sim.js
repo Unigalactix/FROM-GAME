@@ -148,10 +148,9 @@ export function advance(st, dt, input) {
   }
 
   // ---- Prompts ----
-  const promptDoor =
-    doorNear && talismans > 0 && !wards.some((w) => w.name === doorNear.name)
-      ? doorNear.name
-      : null;
+  const doorFree = doorNear && !wards.some((w) => w.name === doorNear.name);
+  const promptDoor = doorFree && talismans > 0 ? doorNear.name : null;
+  const promptDoorEmpty = doorFree && talismans <= 0 ? doorNear.name : null;
   const promptHide = !!hideSpot;
 
   return {
@@ -167,6 +166,7 @@ export function advance(st, dt, input) {
     talismans,
     wards,
     promptDoor,
+    promptDoorEmpty,
     promptHide,
   };
 }

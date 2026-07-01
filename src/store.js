@@ -211,6 +211,7 @@ function nightState() {
     tension: 0,
     wards: [],
     promptDoor: null,
+    promptDoorEmpty: null,
     promptHide: false,
     promptInteract: null,
     stamina: 100,

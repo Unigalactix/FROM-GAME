@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore, getPhaseInfo, dayLight, PLAYER_START } from '../store.js';
-import { WORLD, BUILDINGS, WALLS, HIDE_SPOTS, DECOR_HOUSES } from '../systems/town.js';
+import { WORLD, BUILDINGS, WALLS, HIDE_SPOTS, DECOR_HOUSES, DOORS } from '../systems/town.js';
 import { ENEMY_R } from '../systems/enemies.js';
 import { advance } from '../systems/sim.js';
 import {
@@ -30,6 +30,7 @@ import {
   updateTension,
   footstep,
   stinger,
+  knock,
 } from '../systems/audio.js';
 import { surface } from '../systems/textures.js';
 
@@ -178,6 +179,142 @@ function DecorTown() {
   );
 }
 
+// ---------- Doors & windows on every house ----------
+// Each building gets a solid door slab in its opening plus framed windows whose
+// glass glows warm once the sun goes down, so the town reads as inhabited — and
+// so you can see the shapes that come to knock, silhouetted at the panes.
+function buildFacades() {
+  const doors = [];
+  const windows = [];
+
+  const pushWindow = (pos, horizontal, wh) => {
+    const winH = Math.min(1.2, Math.max(0.8, wh * 0.42));
+    const len = wx(38);
+    if (horizontal) {
+      windows.push({ pos, frame: [len + 0.16, winH + 0.16, 0.09], glass: [len, winH, 0.2] });
+    } else {
+      windows.push({ pos, frame: [0.09, winH + 0.16, wz(38) + 0.16], glass: [0.2, winH, wz(38)] });
+    }
+  };
+
+  const addRect = (b, wh, doorSide) => {
+    const { x, y, w, h } = b;
+    const yc = Math.max(1.5, wh * 0.5);
+    const cx = wx(x + w / 2);
+    const cz = wz(y + h / 2);
+
+    // Windows along the top & bottom walls (offset from the door in the centre).
+    for (const fx of [0.26, 0.74]) {
+      const px = wx(x + w * fx);
+      pushWindow([px, yc, wz(y)], true, wh);
+      pushWindow([px, yc, wz(y + h)], true, wh);
+    }
+    // Windows along the left & right walls.
+    for (const fy of [0.32, 0.68]) {
+      const pz = wz(y + h * fy);
+      pushWindow([wx(x), yc, pz], false, wh);
+      pushWindow([wx(x + w), yc, pz], false, wh);
+    }
+
+    // Door slab in the opening (decor houses get a decorative one facing south).
+    const doorH = Math.min(2.2, wh * 0.72);
+    const doorW = wx(50);
+    if (doorSide === 'top') doors.push({ pos: [cx, doorH / 2, wz(y)], size: [doorW, doorH, 0.14] });
+    else if (doorSide === 'bottom') doors.push({ pos: [cx, doorH / 2, wz(y + h)], size: [doorW, doorH, 0.14] });
+    else if (doorSide === 'left') doors.push({ pos: [wx(x), doorH / 2, cz], size: [0.14, doorH, wz(50)] });
+    else if (doorSide === 'right') doors.push({ pos: [wx(x + w), doorH / 2, cz], size: [0.14, doorH, wz(50)] });
+    else doors.push({ pos: [cx, doorH / 2, wz(y + h)], size: [doorW, doorH, 0.14] });
+  };
+
+  for (const b of BUILDINGS) addRect(b, WALL_H, b.door);
+  for (const h of DECOR_HOUSES) addRect(h, h.wh, null);
+
+  return { doors, windows };
+}
+
+function Facades() {
+  const winMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0x0e1116,
+        emissive: 0xffb867,
+        emissiveIntensity: 0,
+        roughness: 0.25,
+        metalness: 0.0,
+      }),
+    []
+  );
+  const frameMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: 0x241a12, roughness: 0.85 }),
+    []
+  );
+  const doorMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: 0x3a281a, roughness: 0.7, metalness: 0.08 }),
+    []
+  );
+  const { doors, windows } = useMemo(buildFacades, []);
+  const glassRef = useRef();
+  const frameRef = useRef();
+  const doorRef = useRef();
+
+  useEffect(() => {
+    const d = new THREE.Object3D();
+    const write = (mesh, items, sizeKey) => {
+      if (!mesh) return;
+      items.forEach((it, i) => {
+        d.position.set(it.pos[0], it.pos[1], it.pos[2]);
+        const s = it[sizeKey];
+        d.scale.set(s[0], s[1], s[2]);
+        d.rotation.set(0, 0, 0);
+        d.updateMatrix();
+        mesh.setMatrixAt(i, d.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    };
+    write(frameRef.current, windows, 'frame');
+    write(glassRef.current, windows, 'glass');
+    write(doorRef.current, doors, 'size');
+  }, [doors, windows]);
+
+  // Windows glow warm as daylight fades, with a faint candle flicker.
+  useFrame(() => {
+    const light = dayLight(useGameStore.getState().time);
+    const glow = Math.max(0, 1 - light * 1.15);
+    winMat.emissiveIntensity = glow * (1.5 + Math.sin(performance.now() * 0.004) * 0.15);
+  });
+
+  return (
+    <group>
+      <instancedMesh
+        ref={frameRef}
+        args={[undefined, undefined, windows.length]}
+        material={frameMat}
+        frustumCulled={false}
+        castShadow
+      >
+        <boxGeometry args={[1, 1, 1]} />
+      </instancedMesh>
+      <instancedMesh
+        ref={glassRef}
+        args={[undefined, undefined, windows.length]}
+        material={winMat}
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+      </instancedMesh>
+      <instancedMesh
+        ref={doorRef}
+        args={[undefined, undefined, doors.length]}
+        material={doorMat}
+        frustumCulled={false}
+        castShadow
+      >
+        <boxGeometry args={[1, 1, 1]} />
+      </instancedMesh>
+    </group>
+  );
+}
+
 function BuildingFloors() {
   const cache = useMemo(() => new Map(), []);
   const matFor = (b) => {
@@ -256,12 +393,47 @@ function Enemies() {
       const angle = Math.atan2(e.tx - e.x, e.ty - e.y);
       node.root.rotation.y = angle;
       const chasing = e.state === 'chase';
+      const knocking = e.state === 'knock';
       const eyeColor = chasing ? 0xb81717 : 0x9c5a1f;
       node.lEye.material.color.setHex(eyeColor);
       node.rEye.material.color.setHex(eyeColor);
       const flick = chasing ? 1.2 + Math.sin(performance.now() * 0.02) * 0.4 : 0.5;
       node.lEye.material.emissiveIntensity = flick;
       node.rEye.material.emissiveIntensity = flick;
+
+      // The grin: scale the mouth with the enemy's smile value.
+      const grin = e.smile || 0;
+      node.mouth.visible = grin > 0.04;
+      node.mouth.scale.set(0.5 + grin * 1.0, 0.55 + grin * 0.7, 1);
+
+      // Idle head tilt — a slow, wrong lean; sharper while knocking.
+      const now = performance.now();
+      node.head.rotation.z = knocking
+        ? Math.sin(now * 0.006) * 0.38
+        : chasing
+        ? 0
+        : Math.sin(now * 0.0016 + e.id) * 0.14;
+
+      // Knocking: rap the raised arm on the door and play the sound on each beat.
+      if (knocking) {
+        const period = 0.46; // seconds per knock
+        const bi = Math.floor(e.knockBeat / period);
+        const phase = (e.knockBeat % period) / period;
+        const tap = Math.sin(Math.min(1, phase * 2) * Math.PI); // quick forward tap
+        node.rArm.rotation.x = -1.5 - tap * 0.6;
+        if (bi !== node.lastKnock) {
+          node.lastKnock = bi;
+          const pl = useGameStore.getState().player;
+          const dd = Math.hypot(pl.x - e.x, pl.y - e.y);
+          const vol = Math.max(0, Math.min(1, (400 - dd) / 400));
+          if (vol > 0.05) knock(vol);
+        }
+      } else {
+        node.lastKnock = -1;
+        // Chasing: arms reach forward; otherwise relax to hanging.
+        const rest = chasing ? -1.1 : 0;
+        node.rArm.rotation.x += (rest - node.rArm.rotation.x) * 0.12;
+      }
     }
   });
 
@@ -282,15 +454,21 @@ function makeFigure() {
   head.castShadow = true;
   root.add(head);
 
-  // Long, gaunt arms hanging at unnatural length.
-  const mkArm = (s) => {
-    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.035, 1.2, 6), bodyMat);
-    a.position.set(s * 0.3, 0.95, 0.02);
-    a.rotation.z = s * 0.1;
-    a.castShadow = true;
-    return a;
-  };
-  root.add(mkArm(-1), mkArm(1));
+  // Left arm — long and gaunt, hanging at unnatural length.
+  const lArm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.035, 1.2, 6), bodyMat);
+  lArm.position.set(-0.3, 0.95, 0.02);
+  lArm.rotation.z = -0.1;
+  lArm.castShadow = true;
+  root.add(lArm);
+
+  // Right arm — pivots at the shoulder so it can be raised to knock.
+  const rArm = new THREE.Group();
+  rArm.position.set(0.3, 1.5, 0.04);
+  const rArmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.035, 1.2, 6), bodyMat);
+  rArmMesh.position.y = -0.55;
+  rArmMesh.castShadow = true;
+  rArm.add(rArmMesh);
+  root.add(rArm);
 
   const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8);
   const mkEye = () =>
@@ -304,7 +482,22 @@ function makeFigure() {
   rEye.position.set(0.09, 1.88, 0.22);
   root.add(lEye, rEye);
 
-  return { root, lEye, rEye };
+  // The smile — a too-wide pale grin carved across the face.
+  const mouth = new THREE.Mesh(
+    new THREE.TorusGeometry(0.12, 0.028, 6, 16, Math.PI),
+    new THREE.MeshStandardMaterial({
+      color: 0xf3ede2,
+      emissive: 0x6a2a20,
+      emissiveIntensity: 0.25,
+      roughness: 0.6,
+    })
+  );
+  mouth.position.set(0, 1.78, 0.235);
+  mouth.rotation.z = Math.PI; // flip the arc into an upturned grin
+  mouth.visible = false;
+  root.add(mouth);
+
+  return { root, head, lEye, rEye, rArm, mouth, lastKnock: -1 };
 }
 
 // ---------- Talisman wards ----------
@@ -357,6 +550,7 @@ function makeWard() {
 function Atmosphere() {
   const { scene } = useThree();
   const ambient = useRef();
+  const hemi = useRef();
   const sun = useRef();
 
   // Reusable colour scratch values so we don't allocate every frame.
@@ -387,6 +581,7 @@ function Atmosphere() {
     // Ambient + sun scale directly with daylight so you can see the town by day
     // and lose it gradually as the sun goes down.
     if (ambient.current) ambient.current.intensity = 0.06 + light * 1.25;
+    if (hemi.current) hemi.current.intensity = 0.12 + light * 0.7;
     if (sun.current) {
       sun.current.intensity = light * 1.1;
       // Warm midday -> cold pale moon at night.
@@ -411,6 +606,7 @@ function Atmosphere() {
   return (
     <>
       <ambientLight ref={ambient} intensity={0.6} color="#9aa0ac" />
+      <hemisphereLight ref={hemi} args={[0x9fb2c4, 0x2a2620, 0.4]} />
       <directionalLight
         ref={sun}
         position={[wx(WORLD.w * 0.7), 60, wz(WORLD.h * 0.2)]}
@@ -1474,7 +1670,7 @@ export default function FirstPerson() {
       gl={{
         antialias: quality !== 'low',
         toneMapping: THREE.ACESFilmicToneMapping,
-        toneMappingExposure: 1.15,
+        toneMappingExposure: 1.25,
       }}
       style={{ position: 'absolute', inset: 0 }}
       onCreated={({ gl, scene }) => {
@@ -1489,6 +1685,7 @@ export default function FirstPerson() {
       <Walls />
       <Roofs />
       <DecorTown />
+      <Facades />
       <HideSpots />
       <Forest />
       <PortalTrees />

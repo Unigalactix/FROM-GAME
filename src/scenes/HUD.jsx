@@ -21,6 +21,7 @@ export default function HUD() {
   const tension = useGameStore((s) => s.tension);
   const talismans = useGameStore((s) => s.talismans);
   const promptDoor = useGameStore((s) => s.promptDoor);
+  const promptDoorEmpty = useGameStore((s) => s.promptDoorEmpty);
   const promptHide = useGameStore((s) => s.promptHide);
   const promptInteract = useGameStore((s) => s.promptInteract);
   const battery = useGameStore((s) => s.battery);
@@ -121,7 +122,7 @@ export default function HUD() {
       {/* ---------- PHASE-CHANGE COLOUR WASH ---------- */}
       {wash && (
         <div
-          key={wash.key}
+          key={`wash-${wash.key}`}
           className="phase-wash absolute inset-0 z-10"
           style={{ background: wash.bg }}
           onAnimationEnd={() => setWash(null)}
@@ -130,7 +131,7 @@ export default function HUD() {
       {/* ---------- DAMAGE FLASH ---------- */}
       {hit > 0 && (
         <div
-          key={hit}
+          key={`hit-${hit}`}
           className="damage-flash absolute inset-0 z-10"
           style={{
             background:
@@ -209,6 +210,11 @@ export default function HUD() {
             {promptHide && <Prompt keyLabel={keyLabel(keybinds.hide)} text="Hide Here" active />}
             {promptDoor && (
               <Prompt keyLabel={keyLabel(keybinds.ward)} text={`Hang Talisman \u00b7 ${promptDoor}`} active />
+            )}
+            {promptDoorEmpty && (
+              <p className="font-mono text-[10px] tracking-[0.3em] text-stone-500">
+                {`NO TALISMAN \u2014 CRAFT ONE [${keyLabel(keybinds.craft)}]`}
+              </p>
             )}
           </>
         )}

@@ -171,7 +171,7 @@ function nearest(list, px, py, range) {
   return best;
 }
 
-export const nearestDoor = (px, py, range = 42) => nearest(DOORS, px, py, range);
+export const nearestDoor = (px, py, range = 90) => nearest(DOORS, px, py, range);
 export const nearestHideSpot = (px, py, range = 34) => nearest(HIDE_SPOTS, px, py, range);
 
 // ---- Line of sight (segment vs walls via Liang-Barsky clipping) ----
